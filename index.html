@@ -42,7 +42,7 @@
   <h1>Pizza 4 The People</h1>
   <div>20 פיצות על הארגז, בלי חבל. תביא אותן לעיגול הצהוב ועצור בפנים.</div>
   <div style="font-size:16px;opacity:.85">מהר = טיפ גדול. חד מדי = פיצות על הכביש.<br>נייד: הטה לפנייה, ⬆ גז ⬇ בלם · מחשב: חיצים / WASD</div>
-  <button id="start">יאללה, לנסוע</button>
+  <button id="start" disabled>טוען…</button>
 </div>
 <div id="touch" class="hidden"><div id="brake">⬇</div><div id="gas">⬆</div></div>
 <button id="flip" class="hidden">⇄ הפוך היגוי</button>
@@ -56,7 +56,7 @@
 }}
 </script>
 <script>
-  window.addEventListener('error', e => { const m = document.getElementById('msg'); if (m) { const d = document.createElement('div'); d.style.cssText = 'font-size:13px;color:#ffb3b3;direction:ltr;max-width:90vw'; d.textContent = 'שגיאה: ' + (e.message || e.error); m.appendChild(d); } });
+  window.addEventListener('error', e => { const m = document.getElementById('msg'); if (m) { const d = document.createElement('div'); d.style.cssText = 'font-size:18px;font-weight:700;color:#fff;background:#b00;padding:8px 12px;border-radius:8px;direction:ltr;max-width:90vw'; d.textContent = 'שגיאה: ' + (e.message || e.error); m.appendChild(d); } });
   window.addEventListener('unhandledrejection', e => console.warn(e.reason));
 </script>
 <script type="module">
@@ -103,6 +103,18 @@ sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, far: 300 });
 scene.add(sun, sun.target);
 const flat = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+
+// ===== מיתוג (טקסטורה מצוירת בקוד) =====
+function brandTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#d62828'; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = '#ffd23f'; g.lineWidth = 10; g.strokeRect(10, 10, 236, 236);
+  g.fillStyle = '#ffd23f'; g.textAlign = 'center'; g.font = '900 54px Arial Black, Arial, sans-serif';
+  g.fillText('PIZZA', 128, 92); g.font = '900 88px Arial Black, Arial, sans-serif'; g.fillText('4', 128, 170);
+  g.font = '800 30px Arial, sans-serif'; g.fillText('THE PEOPLE', 128, 220);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+const BRAND = brandTexture();
 
 // ================== עולם הפיזיקה ==================
 const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
@@ -234,16 +246,6 @@ function driveRack(dt) { // מזיזים את הגוף הקינמטי במהיר
 
 // ================== ערימת 20 מגשים – כל אחד גוף פיזיקלי נפרד ==================
 const trayGeo = new THREE.BoxGeometry(T.w, T.h, T.w);
-function brandTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
-  g.fillStyle = '#d62828'; g.fillRect(0, 0, 256, 256);
-  g.strokeStyle = '#ffd23f'; g.lineWidth = 10; g.strokeRect(10, 10, 236, 236);
-  g.fillStyle = '#ffd23f'; g.textAlign = 'center'; g.font = '900 54px Arial Black, Arial, sans-serif';
-  g.fillText('PIZZA', 128, 92); g.font = '900 88px Arial Black, Arial, sans-serif'; g.fillText('4', 128, 170);
-  g.font = '800 30px Arial, sans-serif'; g.fillText('THE PEOPLE', 128, 220);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
-}
-const BRAND = brandTexture();
 const cardboard = new THREE.MeshLambertMaterial({ color: 0xc9a46a });
 const boxTop = new THREE.MeshLambertMaterial({ map: BRAND });
 const trayMats = [[cardboard, cardboard, boxTop, cardboard, cardboard, cardboard]]; // +y = מכסה ממותג
@@ -359,7 +361,9 @@ function endRound() {
   msg.classList.remove('hidden');
   document.getElementById('again').onclick = startRound;
 }
-document.getElementById('start').addEventListener('click', () => { enableTilt(); startRound(); });
+const startBtn = document.getElementById('start');
+function onStartTap(e) { if (running || startBtn.disabled) return; if (e) e.preventDefault(); enableTilt(); startRound(); }
+msg.addEventListener('click', onStartTap); // כל מסך הפתיחה לחיץ, לא רק הכפתור
 
 // ================== לולאה ==================
 const clock = new THREE.Clock();
@@ -451,6 +455,7 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 
 await loadMap();
 buildStack(); placeTarget();
+startBtn.disabled = false; startBtn.textContent = 'יאללה, לנסוע';
 tick();
 </script>
 </body>
