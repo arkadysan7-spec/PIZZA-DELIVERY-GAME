@@ -63,10 +63,12 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ================== הגדרות (הכל לכוונון) ==================
 const CFG = {
-  MAP_URL: null,          // מפת יפו כ-GLB, למשל 'assets/jaffa.glb'
+  MAP_URL: null,          // מפת GLB (אם תהיה). אחרת: יפו האמיתית מ-OpenStreetMap
+  OSM: true,              // בניינים ורחובות אמיתיים סביב מגדל השעון ביפו
   BIKE_URL: null,         // מודל האופניים בעתיד
   PIZZAS: 20,
   MAX_SPEED: 18,          // מ/ש
@@ -191,7 +193,102 @@ function buildPlaceholderCity() {
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 600), new THREE.MeshLambertMaterial({ color: 0x2f7fb5 }));
   sea.rotation.x = -Math.PI / 2; sea.position.set(-350, 0.05, 0); city.add(sea); // הים – מערבית, כמו ביפו
 }
+// ================== יפו האמיתית מ-OpenStreetMap (בקוד, בלי Blender ובלי קרדיטים) ==================
+const JAFFA = { lat: 32.05495, lon: 34.75640, bbox: '32.0525,34.7525,32.0575,34.7605' }; // מרכז = מגדל השעון
+const footprints = [];   // [{poly:[[x,z]...], minX,maxX,minZ,maxZ}] – להתנגשות האופניים
+const roadPts = [];      // נקודות על רחובות – ליעדי משלוח ולנקודת התחלה
+let startPose = { x: 0, z: 0, heading: 0 };
+async function fetchJaffa() {
+  const KEY = 'p4tp-jaffa-v1';
+  try { const c = localStorage.getItem(KEY); if (c) return JSON.parse(c); } catch (e) {}
+  const q = `[out:json][timeout:25];(way["building"](${JAFFA.bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|service)$"](${JAFFA.bbox}););out geom;`;
+  let j = null;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try { const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q) }); if (r.ok) { j = await r.json(); break; } } catch (e) {}
+  }
+  if (!j) throw new Error('OSM לא זמין');
+  const kx = 111320 * Math.cos(JAFFA.lat * Math.PI / 180), k = 111320;
+  const P = g => g.map(p => [Math.round((p.lon - JAFFA.lon) * kx * 10) / 10, Math.round(-(p.lat - JAFFA.lat) * k * 10) / 10]);
+  const out = { b: [], r: [] };
+  for (const e of j.elements) { if (!e.geometry) continue; const t = e.tags || {};
+    if (t.building) out.b.push([P(e.geometry), parseFloat(t.height) || (t['building:levels'] ? parseFloat(t['building:levels']) * 3.2 : 0), t.name || '', t.building]);
+    else if (t.highway) out.r.push([P(e.geometry), t.highway]); }
+  try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) {}
+  return out;
+}
+function hash(n) { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); }
+function buildJaffa(data) {
+  // קרקע + ים מערבי
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), flat(0xcdbf9f));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; city.add(ground);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(800, 1400), new THREE.MeshLambertMaterial({ color: 0x2f86bd }));
+  sea.rotation.x = -Math.PI / 2; sea.position.set(-960, 0.06, 0); city.add(sea);
+  // רחובות: רצועות לפי סוג
+  const W = { primary: 12, secondary: 10, tertiary: 8, residential: 6.5, unclassified: 6, living_street: 5, pedestrian: 4.5, service: 4 };
+  const asphalt = [], stone = [];
+  for (const [pts, type] of data.r) {
+    const w = (W[type] || 5) / 2, pos = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      pos.push([pts[i][0] - dz * w, pts[i][1] + dx * w], [pts[i][0] + dz * w, pts[i][1] - dx * w]);
+      if (type !== 'service') roadPts.push({ x: pts[i][0], z: pts[i][1], dir: Math.atan2(-dx, -dz), type });
+    }
+    const v = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [l0, r0] = [pos[i * 2], pos[i * 2 + 1]], [l1, r1] = [pos[i * 2 + 2], pos[i * 2 + 3]];
+      v.push(l0[0], 0, l0[1], r0[0], 0, r0[1], l1[0], 0, l1[1], r0[0], 0, r0[1], r1[0], 0, r1[1], l1[0], 0, l1[1]);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.computeVertexNormals();
+    (type === 'pedestrian' ? stone : asphalt).push(g);
+  }
+  const fixUp = g => { const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); return g; };
+  if (asphalt.length) { const m = new THREE.Mesh(fixUp(mergeGeometries(asphalt)), new THREE.MeshLambertMaterial({ color: 0x45454c, side: THREE.DoubleSide })); m.position.y = 0.03; m.receiveShadow = true; city.add(m); }
+  if (stone.length) { const m = new THREE.Mesh(fixUp(mergeGeometries(stone)), new THREE.MeshLambertMaterial({ color: 0xd8c8a4, side: THREE.DoubleSide })); m.position.y = 0.04; m.receiveShadow = true; city.add(m); }
+  // בניינים: אבן חול / קרם / כורכר, גגות שטוחים, מאוחדים לרשת אחת (מהיר בנייד)
+  const pal = [0xe9dcc0, 0xdcc9a3, 0xd2b98d, 0xf0e6d2, 0xc9ad80, 0xe2cfae].map(c => new THREE.Color(c));
+  const geos = [];
+  data.b.forEach(([poly, h, name, kind], i) => {
+    if (poly.length < 4) return;
+    let height = h || (kind === 'apartments' ? 12 + hash(i) * 8 : kind === 'mosque' ? 9 : 5 + hash(i) * 6);
+    if (kind === 'roof' || kind === 'ruins') height = Math.max(height, 3);
+    const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    g.rotateX(-Math.PI / 2);
+    const isTower = /מגדל השעון/.test(name);
+    const col = isTower ? new THREE.Color(0xf3d27a) : pal[(hash(i + 7) * pal.length) | 0];
+    const cols = new Float32Array(g.attributes.position.count * 3);
+    for (let k = 0; k < g.attributes.position.count; k++) {
+      const top = g.attributes.position.getY(k) > height - 0.01 ? 1.06 : 1;   // גג קצת בהיר יותר
+      cols[k * 3] = col.r * top; cols[k * 3 + 1] = col.g * top; cols[k * 3 + 2] = col.b * top;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    geos.push(g.toNonIndexed ? (g.index ? g.toNonIndexed() : g) : g);
+    const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+    footprints.push({ poly, minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) });
+  });
+  const city3d = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  city3d.castShadow = city3d.receiveShadow = true; city.add(city3d);
+  // התחלה: נקודת רחוב קרובה למגדל השעון
+  let best = null; for (const r of roadPts) { if (r.type === 'pedestrian') continue; const d = Math.hypot(r.x - 10, r.z - 10); if (!best || d < best.d) best = { ...r, d }; }
+  if (best) startPose = { x: best.x, z: best.z, heading: best.dir };
+}
+function insideBuilding(x, z) {
+  for (const f of footprints) {
+    if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+    let inside = false; const p = f.poly;
+    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+      if (((p[i][1] > z) !== (p[j][1] > z)) && (x < (p[j][0] - p[i][0]) * (z - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0])) inside = !inside;
+    }
+    if (inside) return true;
+  }
+  return false;
+}
 async function loadMap() {
+  if (!CFG.MAP_URL && CFG.OSM) {
+    try { buildJaffa(await fetchJaffa()); return; }
+    catch (e) { console.warn('יפו לא נטענה, עוברים לעיר זמנית', e); }
+  }
   if (!CFG.MAP_URL) return buildPlaceholderCity();
   try {
     const gltf = await new GLTFLoader().loadAsync(CFG.MAP_URL);
@@ -288,6 +385,12 @@ const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 30, 8), new T
 beacon.position.y = 15; target.add(beacon); scene.add(target);
 let orderStart = performance.now();
 function placeTarget() {
+  if (roadPts.length) {
+    let t, n = 0;
+    do { t = roadPts[(Math.random() * roadPts.length) | 0]; n++; }
+    while (n < 200 && (Math.hypot(t.x - bike.position.x, t.z - bike.position.z) < 60 || Math.hypot(t.x - bike.position.x, t.z - bike.position.z) > 260));
+    target.position.set(t.x, 0.08, t.z); orderStart = performance.now(); return;
+  }
   const s = 30;
   do target.position.set(((Math.random() * 12 - 6) | 0) * s, 0.08, ((Math.random() * 12 - 6) | 0) * s);
   while (target.position.distanceTo(bike.position) < 45);
@@ -348,7 +451,7 @@ function flash(text, color = '#ffd23f') {
 const currentTip = () => Math.max(0, Math.round(CFG.TIP_START - (performance.now() - orderStart) / 1000));
 
 function startRound() {
-  bike.position.set(0, 0, 0); heading = 0; speed = 0; steerSm = 0; bike.rotation.set(0, 0, 0);
+  bike.position.set(startPose.x, 0, startPose.z); heading = startPose.heading; speed = 0; steerSm = 0; bike.rotation.set(0, 0, 0);
   money = 0; deliveries = 0;
   buildStack(); placeTarget();
   msg.classList.add('hidden'); running = true;
@@ -396,7 +499,8 @@ function tick() {
     const fwd = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
     const next = bike.position.clone().addScaledVector(fwd, speed * dt);
     const probe = new THREE.Box3().setFromCenterAndSize(next.clone().setY(1), new THREE.Vector3(0.8, 2, 0.8));
-    if (obstacles.some(b => b.intersectsBox(probe))) { shake = Math.min(shake + Math.abs(speed) * 0.05, 0.6); speed = -speed * 0.25; }
+    const hitHouse = footprints.length && [[0.5, 0], [-0.5, 0], [0, 0.9], [0, -0.9]].some(([ox, oz]) => insideBuilding(next.x + ox * Math.cos(heading) + oz * -Math.sin(heading), next.z - ox * Math.sin(heading) + oz * -Math.cos(heading)));
+    if (hitHouse || obstacles.some(b => b.intersectsBox(probe))) { shake = Math.min(shake + Math.abs(speed) * 0.05, 0.6); speed = -speed * 0.25; }
     else bike.position.copy(next);
     bike.rotation.y = heading;
     const lean = THREE.MathUtils.clamp(-Math.atan(speed * yawRate / 9.8), -0.35, 0.35); // השכבה כמו אופניים אמיתיים – מקזזת חלק מהכוח הצידי
@@ -454,6 +558,8 @@ function tick() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 await loadMap();
+bike.position.set(startPose.x, 0, startPose.z); heading = startPose.heading; bike.rotation.y = heading;
+camPos.set(startPose.x + Math.sin(heading) * 8, 4, startPose.z + Math.cos(heading) * 8);
 buildStack(); placeTarget();
 startBtn.disabled = false; startBtn.textContent = 'יאללה, לנסוע';
 tick();
