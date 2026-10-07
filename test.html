@@ -102,7 +102,7 @@ const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 60
 const baseFov = () => (innerWidth > innerHeight ? 58 : 72); // לרוחב = שדה ראייה רחב יותר ממילא
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 1.1));
 const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.06;
 Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, far: 300 });
 scene.add(sun, sun.target);
 // ===== סגנון מצויר: תאורה ב-3 מדרגות (toon) =====
@@ -371,7 +371,7 @@ function buildRoadNet(list) {
     }
   }
   const lay = (geos, color, y) => { if (!geos.length) return; const m = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshToonMaterial({ color, gradientMap: TOON, side: THREE.DoubleSide })); m.position.y = y; m.receiveShadow = true; city.add(m); };
-  lay(stone, 0xe9c99a, 0.03); lay(asphalt, 0x3b3f4a, 0.045);
+  lay(stone, 0xf0d2a0, 0.03); lay(asphalt, 0x5d6272, 0.045);
   if (dash.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(dash, 3)); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffd23f, side: THREE.DoubleSide })); m.position.y = 0.06; city.add(m); }
 }
 function addClouds() { // עננים מצוירים – לבנים, בלי ערפל
@@ -413,7 +413,8 @@ async function loadGlbMap() {
         else { uv[i * 2] = 0.02; uv[i * 2 + 1] = 0.02; }
       }
       g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-      mat = new THREE.MeshToonMaterial({ color: color.clone().offsetHSL(0, 0.12, 0.04), map: WINDOWS, gradientMap: TOON });
+      const JAFFA_PAL = [0xf7d39b, 0xf3b27a, 0xeea07a, 0xfbe6c2, 0xf5c6a0, 0xf0c27a]; // חול, משמש, טרקוטה, קרם, ורוד-חול, חרדל
+      mat = new THREE.MeshToonMaterial({ color: JAFFA_PAL[(parseInt(name.replace(/\D/g, '') || '0') + (name.includes('.') ? 3 : 0)) % JAFFA_PAL.length], map: WINDOWS, gradientMap: TOON });
     } else mat = new THREE.MeshToonMaterial({ color: fixed !== undefined ? fixed : color, gradientMap: TOON });
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true; mesh.castShadow = name.startsWith('stone');
