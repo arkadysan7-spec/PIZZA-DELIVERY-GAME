@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Pizza 4 The People – שליח</title>
+<style>
+  html,body{margin:0;height:100%;height:100dvh;overflow:hidden;overscroll-behavior:none;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;background:#87b8e0;font-family:system-ui,Arial,sans-serif}
+  canvas{display:block}
+  #hud{position:fixed;top:calc(8px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));left:calc(10px + env(safe-area-inset-left));display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;pointer-events:none;
+       color:#fff;font-weight:800;font-size:19px;text-shadow:0 2px 4px #0008}
+  #hud .box{background:#d62828d9;padding:6px 12px;border-radius:10px}
+  #hud .tip{background:#e0a800d9}
+  #toast{position:fixed;top:30%;left:0;right:0;text-align:center;color:#ffd23f;font-size:34px;font-weight:900;
+         text-shadow:0 3px 6px #000a;pointer-events:none;opacity:0;transition:opacity .3s}
+  #msg{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+       background:#000a;color:#fff;text-align:center;font-size:20px;padding:0 16px}
+  #msg h1{margin:0;color:#ffd23f;font-size:34px}
+  #msg button{font-size:22px;font-weight:800;padding:14px 28px;border:0;border-radius:14px;background:#ffd23f;color:#b00;cursor:pointer}
+  #touch{position:fixed;bottom:calc(14px + env(safe-area-inset-bottom));left:0;right:0;display:flex;justify-content:space-between;padding:0 calc(16px + env(safe-area-inset-left)) 0 calc(16px + env(safe-area-inset-right));pointer-events:none}
+  #touch div{pointer-events:auto;width:90px;height:90px;border-radius:50%;background:#fff3;border:2px solid #fff8;
+       display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:800;user-select:none}
+  #rotate{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;
+          background:#b81f1f;color:#ffd23f;font-size:24px;font-weight:900;text-align:center;z-index:9}
+  @media (orientation:portrait) and (pointer:coarse){ #rotate{display:flex} }
+  #flip{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);pointer-events:auto;background:#0006;color:#fff;
+        border:1px solid #fff6;border-radius:10px;padding:6px 12px;font-size:14px;font-weight:700}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="box" id="trays">🍕 20/20</div>
+  <div class="box tip" id="tip">טיפ: 25₪</div>
+  <div class="box" id="score">₪0 · 0 משלוחים</div>
+</div>
+<div id="toast"></div>
+<div id="msg">
+  <h1>Pizza 4 The People</h1>
+  <div>20 פיצות על הארגז, בלי חבל. תביא אותן לעיגול הצהוב ועצור בפנים.</div>
+  <div style="font-size:16px;opacity:.85">מהר = טיפ גדול. חד מדי = פיצות על הכביש.<br>נייד: הטה לפנייה, ⬆ גז ⬇ בלם · מחשב: חיצים / WASD</div>
+  <button id="start" disabled>טוען…</button>
+</div>
+<div id="touch" class="hidden"><div id="brake">⬇</div><div id="gas">⬆</div></div>
+<button id="flip" class="hidden">⇄ הפוך היגוי</button>
+<div id="rotate"><div style="font-size:60px">📱↻</div>סובב את הטלפון לרוחב</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+}}
+</script>
+<script>
+  window.addEventListener('error', e => { const m = document.getElementById('msg'); if (m) { const d = document.createElement('div'); d.style.cssText = 'font-size:18px;font-weight:700;color:#fff;background:#b00;padding:8px 12px;border-radius:8px;direction:ltr;max-width:90vw'; d.textContent = 'שגיאה: ' + (e.message || e.error); m.appendChild(d); } });
+  window.addEventListener('unhandledrejection', e => console.warn(e.reason));
+</script>
+<script type="module">
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// ================== הגדרות (הכל לכוונון) ==================
+const CFG = {
+  MAP_URL: 'assets/jaffa.glb?v=3', // להעלות את המספר בכל עדכון מפה // יפו מ-Blender/Blosm (OSM) סביב מגדל השעון – נטען מהאתר עצמו, בלי תלות ב-Overpass
+  OSM: true,              // גיבוי: אם ה-GLB לא נטען – בונים יפו בזמן אמת מ-OpenStreetMap
+  MAP_BOUNDS: { minX: -440, maxX: 440, minZ: -390, maxZ: 390 }, // קצה מפת ה-GLB – קיר שקוף
+  BIKE_URL: 'assets/bike.glb?v=1', // אופניים חשמליים + רוכב מצוירים (Blender). null = קוביות
+  PIZZAS: 20,
+  MAX_SPEED: 18,          // מ/ש
+  ACCEL: 5, BRAKE: 8, DRAG: 0.5,
+  TURN_RATE: 1.6,         // רד/ש מקסימום במהירות נמוכה
+  MAX_LAT_ACC: 7.5,       // תאוצה צידית בהגה מלא במהירות – רק פנייה מלאה ומהירה מפילה
+  TILT_DEADZONE: 0.1,     // הטיה קטנה מאוד לא מזיזה
+  STEER_SMOOTH: 6,        // כמה מהר ההגה מגיב (נעים = לא חד)
+  TILT_MAX_DEG: 28,
+  TRAY: { w: 0.6, h: 0.06, mass: 0.6, friction: 0.75, restitution: 0.01 },
+  ASSIST: { center: 10, centerDamp: 3, upright: 30, uprightDamp: 5, lostAt: 0.24 }, // 'הרוכב מחזיק' – סלחנות. 0 = פיזיקה טהורה
+  TIP_START: 25,          // ₪ טיפ ברגע קבלת הזמנה, יורד בשקל לשנייה
+  BASE_PAY: 10,
+  RED: 0xd62828, YELLOW: 0xffd23f,
+};
+const RACK_OFFSET = new THREE.Vector3(0, 1.05, 0.75); // מיקום הארגז ביחס לאופניים
+
+// ================== רינדור ==================
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x6ec6ff); // שמיים כחולים מצוירים
+scene.fog = new THREE.Fog(0xbfe6ff, 90, 320);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
+const baseFov = () => (innerWidth > innerHeight ? 58 : 72); // לרוחב = שדה ראייה רחב יותר ממילא
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb09a78, 1.5));
+const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.06;
+Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, far: 300 });
+scene.add(sun, sun.target);
+// ===== סגנון מצויר: תאורה ב-3 מדרגות (toon) =====
+const TOON = new THREE.DataTexture(new Uint8Array([130, 195, 255]), 3, 1, THREE.RedFormat);
+TOON.minFilter = TOON.magFilter = THREE.NearestFilter; TOON.needsUpdate = true;
+const flat = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: TOON });
+const OUTLINE = new THREE.LineBasicMaterial({ color: 0x3a2414 });
+const addOutline = (mesh, angle = 30) => { mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), OUTLINE)); return mesh; };
+// חלון יפואי: מסגרת לבנה, זכוכית, תריסים ירוקים – טקסטורה שחוזרת על הקירות
+function windowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#3f9a63'; g.fillRect(14, 16, 7, 32); g.fillRect(43, 16, 7, 32);   // תריסים
+  g.fillStyle = '#f7f2e6'; g.fillRect(21, 15, 22, 34);                             // מסגרת
+  g.fillStyle = '#2f6d8f'; g.fillRect(24, 18, 16, 28);                             // זכוכית
+  g.fillStyle = '#7fc3e6'; g.fillRect(24, 18, 5, 28);                              // ברק
+  g.fillStyle = '#3a2414'; g.fillRect(21, 49, 22, 3);                              // אדן
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4; return t;
+}
+const WINDOWS = windowTexture();
+
+// ===== מיתוג (טקסטורה מצוירת בקוד) =====
+function brandTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d');
+  g.fillStyle = '#d62828'; g.fillRect(0, 0, 256, 256);
+  g.strokeStyle = '#ffd23f'; g.lineWidth = 10; g.strokeRect(10, 10, 236, 236);
+  g.fillStyle = '#ffd23f'; g.textAlign = 'center'; g.font = '900 54px Arial Black, Arial, sans-serif';
+  g.fillText('PIZZA', 128, 92); g.font = '900 88px Arial Black, Arial, sans-serif'; g.fillText('4', 128, 170);
+  g.font = '800 30px Arial, sans-serif'; g.fillText('THE PEOPLE', 128, 220);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+const BRAND = brandTexture();
+
+// ================== עולם הפיזיקה ==================
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.solver.iterations = 25;           // ערימה גבוהה צריכה הרבה איטרציות כדי לא "לרעוד"
+world.allowSleep = false;
+// סיוע עדין לכל מגש שעדיין על הארגז: מושך חזרה למרכז ומיישר. מכה חזקה עדיין מפילה (מעבר ל-lostAt אין סיוע).
+world.addEventListener('preStep', () => {
+  const A = CFG.ASSIST; if (!trays || !trays.length) return;
+  const rq = rackBody.quaternion, up = rq.vmult(new CANNON.Vec3(0, 1, 0));
+  for (const t of trays) {
+    if (t.state !== 'onBike') continue;
+    const b = t.body;
+    const rel = b.position.vsub(rackBody.position);
+    const off = rel.vsub(up.scale(rel.dot(up)));               // היסט אופקי ביחס לציר הארגז
+    const d = off.length(); if (d > A.lostAt) continue;
+    const relV = b.velocity.vsub(rackBody.velocity); const relVh = relV.vsub(up.scale(relV.dot(up)));
+    b.applyForce(off.scale(-A.center * b.mass).vsub(relVh.scale(A.centerDamp * b.mass)));
+    const tUp = b.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+    const tau = tUp.cross(up).scale(A.upright * 0.02).vsub(b.angularVelocity.vsub(rackBody.angularVelocity).scale(A.uprightDamp * 0.02));
+    b.torque.vadd(tau, b.torque);
+  }
+});
+const matTray = new CANNON.Material('tray'), matRack = new CANNON.Material('rack'), matGround = new CANNON.Material('ground');
+const T = CFG.TRAY;
+world.addContactMaterial(new CANNON.ContactMaterial(matTray, matTray, { friction: T.friction, restitution: T.restitution }));
+world.addContactMaterial(new CANNON.ContactMaterial(matTray, matRack, { friction: 0.9, restitution: 0.01 }));
+world.addContactMaterial(new CANNON.ContactMaterial(matTray, matGround, { friction: 0.7, restitution: 0.15 }));
+const groundBody = new CANNON.Body({ mass: 0, material: matGround, shape: new CANNON.Plane() });
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+world.addBody(groundBody);
+
+// ================== מפה: יפו או פלייסהולדר ==================
+const city = new THREE.Group(); scene.add(city);
+const obstacles = []; // Box3 להתנגשות האופניים
+function addStaticBox(box) { // גם קיר פיזיקלי, כדי שפיצות שעפות יתנגשו בבניינים
+  obstacles.push(box);
+  const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const b = new CANNON.Body({ mass: 0, material: matGround, shape: new CANNON.Box(new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2)) });
+  b.position.set(c.x, c.y, c.z); world.addBody(b);
+}
+function buildPlaceholderCity() {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), flat(0x9c9486));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; city.add(ground);
+  const roadMat = flat(0x3d3d42), houseCols = [0xe9d8b4, 0xd9c39a, 0xc9a97c, 0xf0e2c8, 0xb8946a];
+  const step = 30, road = 10;
+  for (let i = -6; i <= 6; i++) {
+    const r1 = new THREE.Mesh(new THREE.PlaneGeometry(400, road), roadMat);
+    r1.rotation.x = -Math.PI / 2; r1.position.set(0, 0.02, i * step); r1.receiveShadow = true; city.add(r1);
+    const r2 = r1.clone(); r2.rotation.z = Math.PI / 2; r2.position.set(i * step, 0.021, 0); city.add(r2);
+  }
+  for (let x = -6; x < 6; x++) for (let z = -6; z < 6; z++) {
+    if ((x === -1 || x === 0) && (z === -1 || z === 0)) continue; // כיכר פתוחה – הפיצרייה
+    const cx = x * step + step / 2, cz = z * step + step / 2, size = step - road - 2;
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < n; k++) {
+      const w = size / n - 1, h = 4 + Math.random() * 10;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, size), flat(houseCols[(Math.random() * houseCols.length) | 0]));
+      m.position.set(cx - size / 2 + w / 2 + k * (size / n), h / 2, cz);
+      m.castShadow = m.receiveShadow = true; city.add(m);
+      addStaticBox(new THREE.Box3().setFromObject(m));
+      // מעקה גג בגוון כהה יותר – פרט קטן שנותן עומק
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.5, size + 0.3), flat(0x8a7356));
+      roof.position.set(m.position.x, h + 0.25, cz); roof.castShadow = true; city.add(roof);
+    }
+    const walk = new THREE.Mesh(new THREE.BoxGeometry(size + 2, 0.18, size + 2), flat(0xbdb3a2));
+    walk.position.set(cx, 0.09, cz); walk.receiveShadow = true; city.add(walk);
+  }
+  const dashMat = flat(0xf2e6c4);
+  for (let i = -6; i <= 6; i++) for (let k = -190; k < 190; k += 6) {
+    const d1 = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 2.5), dashMat); d1.rotation.x = -Math.PI / 2; d1.position.set(i * step, 0.03, k); city.add(d1);
+    const d2 = d1.clone(); d2.rotation.z = Math.PI / 2; d2.position.set(k, 0.03, i * step); city.add(d2);
+  }
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 600), new THREE.MeshLambertMaterial({ color: 0x2f7fb5 }));
+  sea.rotation.x = -Math.PI / 2; sea.position.set(-350, 0.05, 0); city.add(sea); // הים – מערבית, כמו ביפו
+}
+// ================== יפו האמיתית מ-OpenStreetMap (בקוד, בלי Blender ובלי קרדיטים) ==================
+const JAFFA = { lat: 32.05495, lon: 34.75640, bbox: '32.0525,34.7525,32.0575,34.7605' }; // מרכז = מגדל השעון
+const footprints = [];   // [{poly:[[x,z]...], minX,maxX,minZ,maxZ}] – להתנגשות האופניים
+const roadPts = [];      // נקודות על רחובות – ליעדי משלוח ולנקודת התחלה
+let startPose = { x: 0, z: 0, heading: 0 };
+async function fetchJaffa() {
+  const KEY = 'p4tp-jaffa-v1';
+  try { const c = localStorage.getItem(KEY); if (c) return JSON.parse(c); } catch (e) {}
+  const q = `[out:json][timeout:25];(way["building"](${JAFFA.bbox});way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|service)$"](${JAFFA.bbox}););out geom;`;
+  let j = null;
+  for (const url of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+    try { const r = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q) }); if (r.ok) { j = await r.json(); break; } } catch (e) {}
+  }
+  if (!j) throw new Error('OSM לא זמין');
+  const kx = 111320 * Math.cos(JAFFA.lat * Math.PI / 180), k = 111320;
+  const P = g => g.map(p => [Math.round((p.lon - JAFFA.lon) * kx * 10) / 10, Math.round(-(p.lat - JAFFA.lat) * k * 10) / 10]);
+  const out = { b: [], r: [] };
+  for (const e of j.elements) { if (!e.geometry) continue; const t = e.tags || {};
+    if (t.building) out.b.push([P(e.geometry), parseFloat(t.height) || (t['building:levels'] ? parseFloat(t['building:levels']) * 3.2 : 0), t.name || '', t.building]);
+    else if (t.highway) out.r.push([P(e.geometry), t.highway]); }
+  try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) {}
+  return out;
+}
+function hash(n) { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); }
+function buildJaffa(data) {
+  // קרקע + ים מערבי
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), flat(0xcdbf9f));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; city.add(ground);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(800, 1400), new THREE.MeshLambertMaterial({ color: 0x2f86bd }));
+  sea.rotation.x = -Math.PI / 2; sea.position.set(-960, 0.06, 0); city.add(sea);
+  // רחובות: רצועות לפי סוג
+  const W = { primary: 12, secondary: 10, tertiary: 8, residential: 6.5, unclassified: 6, living_street: 5, pedestrian: 4.5, service: 4 };
+  const asphalt = [], stone = [];
+  for (const [pts, type] of data.r) {
+    const w = (W[type] || 5) / 2, pos = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      pos.push([pts[i][0] - dz * w, pts[i][1] + dx * w], [pts[i][0] + dz * w, pts[i][1] - dx * w]);
+      if (type !== 'service') roadPts.push({ x: pts[i][0], z: pts[i][1], dir: Math.atan2(-dx, -dz), type });
+    }
+    const v = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [l0, r0] = [pos[i * 2], pos[i * 2 + 1]], [l1, r1] = [pos[i * 2 + 2], pos[i * 2 + 3]];
+      v.push(l0[0], 0, l0[1], r0[0], 0, r0[1], l1[0], 0, l1[1], r0[0], 0, r0[1], r1[0], 0, r1[1], l1[0], 0, l1[1]);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.computeVertexNormals();
+    (type === 'pedestrian' ? stone : asphalt).push(g);
+  }
+  const fixUp = g => { const n = g.attributes.normal; for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0); return g; };
+  if (asphalt.length) { const m = new THREE.Mesh(fixUp(mergeGeometries(asphalt)), new THREE.MeshLambertMaterial({ color: 0x45454c, side: THREE.DoubleSide })); m.position.y = 0.03; m.receiveShadow = true; city.add(m); }
+  if (stone.length) { const m = new THREE.Mesh(fixUp(mergeGeometries(stone)), new THREE.MeshLambertMaterial({ color: 0xd8c8a4, side: THREE.DoubleSide })); m.position.y = 0.04; m.receiveShadow = true; city.add(m); }
+  // בניינים: אבן חול / קרם / כורכר, גגות שטוחים, מאוחדים לרשת אחת (מהיר בנייד)
+  const pal = [0xe9dcc0, 0xdcc9a3, 0xd2b98d, 0xf0e6d2, 0xc9ad80, 0xe2cfae].map(c => new THREE.Color(c));
+  const geos = [];
+  data.b.forEach(([poly, h, name, kind], i) => {
+    if (poly.length < 4) return;
+    let height = h || (kind === 'apartments' ? 12 + hash(i) * 8 : kind === 'mosque' ? 9 : 5 + hash(i) * 6);
+    if (kind === 'roof' || kind === 'ruins') height = Math.max(height, 3);
+    const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+    g.rotateX(-Math.PI / 2);
+    const isTower = /מגדל השעון/.test(name);
+    const col = isTower ? new THREE.Color(0xf3d27a) : pal[(hash(i + 7) * pal.length) | 0];
+    const cols = new Float32Array(g.attributes.position.count * 3);
+    for (let k = 0; k < g.attributes.position.count; k++) {
+      const top = g.attributes.position.getY(k) > height - 0.01 ? 1.06 : 1;   // גג קצת בהיר יותר
+      cols[k * 3] = col.r * top; cols[k * 3 + 1] = col.g * top; cols[k * 3 + 2] = col.b * top;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    geos.push(g.toNonIndexed ? (g.index ? g.toNonIndexed() : g) : g);
+    const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+    footprints.push({ poly, minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) });
+  });
+  const city3d = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  city3d.castShadow = city3d.receiveShadow = true; city.add(city3d);
+  // התחלה: נקודת רחוב קרובה למגדל השעון
+  let best = null; for (const r of roadPts) { if (r.type === 'pedestrian') continue; const d = Math.hypot(r.x - 10, r.z - 10); if (!best || d < best.d) best = { ...r, d }; }
+  if (best) startPose = { x: best.x, z: best.z, heading: best.dir };
+}
+function insideBuilding(x, z) {
+  if (glbMap) return blockedAt(x, z);
+  for (const f of footprints) {
+    if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
+    let inside = false; const p = f.poly;
+    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+      if (((p[i][1] > z) !== (p[j][1] > z)) && (x < (p[j][0] - p[i][0]) * (z - p[i][1]) / (p[j][1] - p[i][1]) + p[i][0])) inside = !inside;
+    }
+    if (inside) return true;
+  }
+  return false;
+}
+// ===== מפת GLB (Blender): התנגשות לפי משולשי הגגות (טביעת רגל אמיתית), גריד לחיפוש מהיר =====
+const CELL = 8, blockGrid = new Map();
+let glbMap = false;
+function addBlockTri(ax, az, bx, bz, cx, cz) {
+  const x0 = Math.floor(Math.min(ax, bx, cx) / CELL), x1 = Math.floor(Math.max(ax, bx, cx) / CELL);
+  const z0 = Math.floor(Math.min(az, bz, cz) / CELL), z1 = Math.floor(Math.max(az, bz, cz) / CELL);
+  for (let i = x0; i <= x1; i++) for (let k = z0; k <= z1; k++) {
+    const key = i + ',' + k; if (!blockGrid.has(key)) blockGrid.set(key, []);
+    blockGrid.get(key).push([ax, az, bx, bz, cx, cz]);
+  }
+}
+function inTri(px, pz, t) {
+  const [ax, az, bx, bz, cx, cz] = t;
+  const d1 = (px - bx) * (az - bz) - (ax - bx) * (pz - bz), d2 = (px - cx) * (bz - cz) - (bx - cx) * (pz - cz), d3 = (px - ax) * (cz - az) - (cx - ax) * (pz - az);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+function blockedAt(x, z) {
+  const B = CFG.MAP_BOUNDS; if (x < B.minX || x > B.maxX || z < B.minZ || z > B.maxZ) return true;
+  const cell = blockGrid.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL));
+  return !!cell && cell.some(t => inTri(x, z, t));
+}
+function buildRoadNet(list) {
+  const W = { primary: 12, secondary: 10, tertiary: 8, residential: 6.5, unclassified: 6, living_street: 5, pedestrian: 4.5, service: 4, footway: 2.5, steps: 2.5 };
+  const LANE = { primary: 1, secondary: 1, tertiary: 1, residential: 1, unclassified: 1 };
+  const asphalt = [], stone = [], dash = [];
+  const ribbon = (pts, w) => {
+    const pos = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      pos.push([pts[i][0] - dz * w, pts[i][1] + dx * w], [pts[i][0] + dz * w, pts[i][1] - dx * w]);
+    }
+    const v = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [l0, r0] = [pos[i * 2], pos[i * 2 + 1]], [l1, r1] = [pos[i * 2 + 2], pos[i * 2 + 3]];
+      v.push(l0[0], 0, l0[1], r0[0], 0, r0[1], l1[0], 0, l1[1], r0[0], 0, r0[1], r1[0], 0, r1[1], l1[0], 0, l1[1]);
+    }
+    for (const p of pts) for (let k = 0; k < 8; k++) { // עיגול בכל צומת/פנייה – בלי חורים
+      const t0 = k / 8 * Math.PI * 2, t1 = (k + 1) / 8 * Math.PI * 2;
+      v.push(p[0], 0, p[1], p[0] + Math.cos(t1) * w, 0, p[1] + Math.sin(t1) * w, p[0] + Math.cos(t0) * w, 0, p[1] + Math.sin(t0) * w);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    const n = new Float32Array(v.length); for (let i = 1; i < n.length; i += 3) n[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    return g;
+  };
+  for (const [pts, type] of list) {
+    const w = (W[type] || 4) / 2;
+    (type === 'pedestrian' || type === 'footway' || type === 'steps' ? stone : asphalt).push(ribbon(pts, w));
+    if (!['footway', 'steps', 'service', 'pedestrian'].includes(type)) for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      roadPts.push({ x: pts[i][0], z: pts[i][1], dir: Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])), type });
+    }
+    if (LANE[type]) { // קו צהוב מקווקו באמצע
+      let carry = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az); if (L < 0.1) continue;
+        const ux = (bx - ax) / L, uz = (bz - az) / L;
+        for (let t = carry; t < L; t += 6) {
+          const t2 = Math.min(L, t + 2.6), x0 = ax + ux * t, z0 = az + uz * t, x1 = ax + ux * t2, z1 = az + uz * t2, hw = 0.13;
+          dash.push(x0 - uz * hw, 0, z0 + ux * hw, x0 + uz * hw, 0, z0 - ux * hw, x1 - uz * hw, 0, z1 + ux * hw,
+                    x0 + uz * hw, 0, z0 - ux * hw, x1 + uz * hw, 0, z1 - ux * hw, x1 - uz * hw, 0, z1 + ux * hw);
+          carry = t + 6 - L;
+        }
+      }
+    }
+  }
+  const lay = (geos, color, y) => { if (!geos.length) return; const m = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshToonMaterial({ color, gradientMap: TOON, side: THREE.DoubleSide })); m.position.y = y; m.receiveShadow = true; city.add(m); };
+  lay(stone, 0xf0d2a0, 0.03); lay(asphalt, 0x5d6272, 0.045);
+  if (dash.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(dash, 3)); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffd23f, side: THREE.DoubleSide })); m.position.y = 0.06; city.add(m); }
+}
+function addClouds() { // עננים מצוירים – לבנים, בלי ערפל
+  const mat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: TOON, fog: false }), geo = new THREE.SphereGeometry(1, 10, 8);
+  for (let c = 0; c < 14; c++) {
+    const a = c / 14 * Math.PI * 2 + Math.random() * 0.3, r = 260 + Math.random() * 120, cl = new THREE.Group();
+    for (let k = 0; k < 5; k++) { const s = new THREE.Mesh(geo, mat); const sz = 9 + Math.random() * 8; s.scale.set(sz, sz * 0.65, sz); s.position.set(k * 11 - 22, Math.random() * 5, Math.random() * 6); cl.add(s); }
+    cl.position.set(Math.cos(a) * r, 70 + Math.random() * 30, Math.sin(a) * r); cl.lookAt(0, cl.position.y, 0); city.add(cl);
+  }
+}
+async function loadGlbMap() {
+  const gltf = await new GLTFLoader().loadAsync(CFG.MAP_URL);
+  gltf.scene.updateMatrixWorld(true);
+  const groups = new Map(); // איחוד לפי חומר => כמה draw calls בלבד (חשוב לטלפון)
+  gltf.scene.traverse(o => {
+    if (!o.isMesh) return;
+    let g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    for (const a of Object.keys(g.attributes)) if (a !== 'position' && a !== 'normal') g.deleteAttribute(a);
+    if (g.index) g = g.toNonIndexed();
+    const name = o.material.name || 'x';
+    if (!groups.has(name)) groups.set(name, { color: o.material.color.clone(), geos: [] });
+    groups.get(name).geos.push(g);
+    const pos = g.attributes.position;
+    const tri = i => addBlockTri(pos.getX(i), pos.getZ(i), pos.getX(i + 1), pos.getZ(i + 1), pos.getX(i + 2), pos.getZ(i + 2));
+    if (name.startsWith('stone')) { for (let i = 0; i < pos.count; i += 3) if (pos.getY(i) > 1.5 && pos.getY(i + 1) > 1.5 && pos.getY(i + 2) > 1.5) tri(i); }
+    else if (name === 'sea') { for (let i = 0; i < pos.count; i += 3) tri(i); }
+  });
+  for (const [name, { color, geos }] of groups) {
+    if (name === 'road' || name === 'walk') continue; // רחובות נבנים מחדש מ-jaffa_roads.json (רוחב לפי סוג + קו צהוב)
+    const fixed = { ground: 0xf2d9a6, plaza: 0xf5e2b8, sea: 0x1e9bff }[name];
+    const g = mergeGeometries(geos);
+    let mat;
+    if (name.startsWith('stone') && !name.includes('tower')) {
+      // UV לחלונות: לאורך הקיר כל 3.2 מ', קומה כל 3.4 מ'. גגות -> שוליים לבנים של הטקסטורה
+      const pos = g.attributes.position, nor = g.attributes.normal, uv = new Float32Array(pos.count * 2);
+      for (let i = 0; i < pos.count; i++) {
+        const nx = nor.getX(i), ny = nor.getY(i), nz = nor.getZ(i);
+        if (Math.abs(ny) < 0.3) { uv[i * 2] = (pos.getX(i) * -nz + pos.getZ(i) * nx) / 3.2; uv[i * 2 + 1] = pos.getY(i) / 3.4; }
+        else { uv[i * 2] = 0.02; uv[i * 2 + 1] = 0.02; }
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      const JAFFA_PAL = [0xf7d39b, 0xf5be8c, 0xf2b896, 0xfbe6c2, 0xf5c6a0, 0xf0c98a]; // חול, משמש, טרקוטה, קרם, ורוד-חול, חרדל
+      mat = new THREE.MeshToonMaterial({ color: JAFFA_PAL[(parseInt(name.replace(/\D/g, '') || '0') + (name.includes('.') ? 3 : 0)) % JAFFA_PAL.length], map: WINDOWS, gradientMap: TOON });
+    } else mat = new THREE.MeshToonMaterial({ color: fixed !== undefined ? fixed : color, gradientMap: TOON });
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.receiveShadow = true; mesh.castShadow = name.startsWith('stone');
+    if (name.startsWith('stone')) addOutline(mesh);
+    city.add(mesh);
+  }
+  try { buildRoadNet(await (await fetch('assets/jaffa_roads.json?v=1')).json()); }
+  catch (e) { console.warn('רחובות לא נטענו', e); }
+  addClouds();
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(1200, 3000), new THREE.MeshLambertMaterial({ color: 0x2f7fb5 })); // הים ממשיך מערבית לגבול
+  sea.rotation.x = -Math.PI / 2; sea.position.set(CFG.MAP_BOUNDS.minX - 610, 0.004, 0); city.add(sea);
+  glbMap = true;
+  // משאירים רק נקודות רחוב פנויות (לא בתוך בניין/ים)
+  for (let i = roadPts.length - 1; i >= 0; i--) if (blockedAt(roadPts[i].x, roadPts[i].z)) roadPts.splice(i, 1);
+  // התחלה: ליד מגדל השעון (ראשית המפה), פנים צפונה ברחוב יפת
+  let best = null; for (const r of roadPts) { const d = Math.hypot(r.x, r.z); if (!best || d < best.d) best = { ...r, d }; }
+  if (best) startPose = { x: best.x, z: best.z, heading: best.dir };
+}
+async function loadMap() {
+  if (CFG.MAP_URL) {
+    try { await loadGlbMap(); return; }
+    catch (e) { console.warn('מפת GLB לא נטענה, מנסים OSM חי', e); glbMap = false; blockGrid.clear(); roadPts.length = 0; }
+  }
+  if (CFG.OSM) {
+    try { buildJaffa(await fetchJaffa()); return; }
+    catch (e) { console.warn('יפו לא נטענה, עוברים לעיר זמנית', e); }
+  }
+  buildPlaceholderCity();
+}
+
+// ================== אופניים (פלייסהולדר) ==================
+const bike = new THREE.Group(); scene.add(bike);
+const bikeBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 1.8), flat(CFG.RED));
+bikeBody.position.y = 0.7; bikeBody.castShadow = true; bike.add(bikeBody);
+const bikeWheels = [];
+for (const z of [-0.75, 0.75]) {
+  const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.15, 10), flat(0x222222));
+  wheel.rotation.z = Math.PI / 2; wheel.position.set(0, 0.35, z); wheel.castShadow = true; bike.add(wheel); bikeWheels.push(wheel);
+}
+const rider = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.8, 0.35), flat(CFG.YELLOW));
+rider.position.set(0, 1.4, 0.1); rider.castShadow = true; bike.add(rider);
+const RACK = { w: 0.7, h: 0.1 };
+const rackMesh = new THREE.Mesh(new THREE.BoxGeometry(RACK.w, RACK.h, RACK.w), flat(0x333333));
+rackMesh.position.copy(RACK_OFFSET); bike.add(rackMesh);
+const plate = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.04), [flat(CFG.RED), flat(CFG.RED), flat(CFG.RED), flat(CFG.RED), new THREE.MeshLambertMaterial({ map: BRAND }), flat(CFG.RED)]);
+plate.position.set(0, 0.7, 1.12); plate.castShadow = true; bike.add(plate); // שלט ממותג מאחור – מה שרואים מהמצלמה
+
+async function loadBike() { // מחליף את הקוביות במודל – אותם מקומות, אז הנטייה והפיזיקה לא משתנות
+  if (!CFG.BIKE_URL) return;
+  try {
+    const gltf = await new GLTFLoader().loadAsync(CFG.BIKE_URL);
+    const frame = gltf.scene.getObjectByName('frame'), man = gltf.scene.getObjectByName('rider');
+    const toon = o => o.traverse(m => { if (m.isMesh) { m.material = new THREE.MeshToonMaterial({ color: m.material.color, gradientMap: TOON }); m.castShadow = true; addOutline(m, 40); } });
+    toon(frame); toon(man);
+    bikeBody.material.visible = false; rider.material.visible = false; bikeWheels.forEach(w => w.visible = false);
+    bikeBody.add(frame); frame.position.add(new THREE.Vector3(0, -0.7, 0));   // bikeBody יושב בגובה 0.7
+    rider.add(man); man.position.add(new THREE.Vector3(0, -1.4, -0.1));       // rider יושב ב-(0,1.4,0.1)
+  } catch (e) { console.warn('מודל האופניים לא נטען, נשארים עם הקוביות', e); }
+}
+
+// הארגז בפיזיקה = גוף קינמטי שעוקב אחרי האופניים. החיכוך שלו הוא מה שסוחב את הפיצות.
+const rackBody = new CANNON.Body({ type: CANNON.Body.KINEMATIC, material: matRack,
+  shape: new CANNON.Box(new CANNON.Vec3(RACK.w / 2, RACK.h / 2, RACK.w / 2)) });
+world.addBody(rackBody);
+function rackTargetPose() {
+  bike.updateMatrixWorld(true);
+  const p = RACK_OFFSET.clone().applyMatrix4(bike.matrixWorld);
+  const q = bike.getWorldQuaternion(new THREE.Quaternion());
+  return { p, q };
+}
+function snapRack() {
+  const { p, q } = rackTargetPose();
+  rackBody.position.set(p.x, p.y, p.z); rackBody.quaternion.set(q.x, q.y, q.z, q.w);
+  rackBody.velocity.setZero(); rackBody.angularVelocity.setZero();
+}
+function driveRack(dt) { // מזיזים את הגוף הקינמטי במהירות (לא טלפורט) כדי שהחיכוך יעבור לפיצות
+  const { p, q } = rackTargetPose();
+  rackBody.velocity.set((p.x - rackBody.position.x) / dt, (p.y - rackBody.position.y) / dt, (p.z - rackBody.position.z) / dt);
+  const cq = new THREE.Quaternion(rackBody.quaternion.x, rackBody.quaternion.y, rackBody.quaternion.z, rackBody.quaternion.w);
+  const dq = q.clone().multiply(cq.invert());
+  if (dq.w < 0) { dq.x *= -1; dq.y *= -1; dq.z *= -1; dq.w *= -1; }
+  const angle = 2 * Math.acos(Math.min(1, dq.w)), s = Math.sqrt(1 - dq.w * dq.w);
+  if (s < 1e-6) rackBody.angularVelocity.setZero();
+  else rackBody.angularVelocity.set(dq.x / s * angle / dt, dq.y / s * angle / dt, dq.z / s * angle / dt);
+}
+
+// ================== ערימת 20 מגשים – כל אחד גוף פיזיקלי נפרד ==================
+const trayGeo = new THREE.BoxGeometry(T.w, T.h, T.w);
+const cardboard = new THREE.MeshLambertMaterial({ color: 0xc9a46a });
+const boxTop = new THREE.MeshLambertMaterial({ map: BRAND });
+const trayMats = [[cardboard, cardboard, boxTop, cardboard, cardboard, cardboard]]; // +y = מכסה ממותג
+let trays = [];
+function clearTrays() { for (const t of trays) { world.removeBody(t.body); scene.remove(t.mesh); } trays = []; }
+function buildStack() {
+  clearTrays(); snapRack();
+  const { q } = rackTargetPose();
+  for (let i = 0; i < CFG.PIZZAS; i++) {
+    const local = new THREE.Vector3((Math.random() - .5) * 0.01, RACK.h / 2 + T.h / 2 + i * (T.h + 0.0005), (Math.random() - .5) * 0.01);
+    const p = local.applyQuaternion(q).add(new THREE.Vector3(rackBody.position.x, rackBody.position.y, rackBody.position.z));
+    const body = new CANNON.Body({ mass: T.mass, material: matTray, shape: new CANNON.Box(new CANNON.Vec3(T.w / 2, T.h / 2, T.w / 2)),
+      linearDamping: 0.08, angularDamping: 0.35 });
+    body.position.set(p.x, p.y, p.z); body.quaternion.set(q.x, q.y, q.z, q.w);
+    world.addBody(body);
+    const mesh = new THREE.Mesh(trayGeo, trayMats[0]); mesh.castShadow = true; mesh.rotation.y = (i % 2) * Math.PI;
+    scene.add(mesh);
+    const tray = { body, mesh, state: 'onBike' }; // onBike | fallen | delivered
+    body.addEventListener('collide', e => { if (e.body === groundBody || (e.body.mass === 0 && e.body !== rackBody)) onTrayHitsGround(tray); });
+    trays.push(tray);
+  }
+}
+function onTrayHitsGround(tray) {
+  if (tray.state !== 'onBike' || !running) return;
+  tray.state = 'fallen';
+  if (navigator.vibrate) navigator.vibrate(70);   // רטט לכל פיצה שנופלת (אנדרואיד; באייפון הדפדפן לא תומך)
+  shake = Math.min(shake + 0.25, 0.6);
+  flash('🍕💥', '#ff5a5a');
+}
+const onBikeCount = () => trays.filter(t => t.state === 'onBike').length;
+function topTrayOnBike() {
+  let best = null;
+  for (const t of trays) if (t.state === 'onBike' && (!best || t.body.position.y > best.body.position.y)) best = t;
+  return best;
+}
+
+// ================== יעד משלוח ==================
+const target = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 0.15, 24), new THREE.MeshBasicMaterial({ color: CFG.YELLOW, transparent: true, opacity: 0.75 }));
+const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 30, 8), new THREE.MeshBasicMaterial({ color: CFG.YELLOW, transparent: true, opacity: 0.3 }));
+beacon.position.y = 15; target.add(beacon); scene.add(target);
+let orderStart = performance.now();
+function placeTarget() {
+  if (roadPts.length) {
+    let t, n = 0;
+    do { t = roadPts[(Math.random() * roadPts.length) | 0]; n++; }
+    while (n < 200 && (Math.hypot(t.x - bike.position.x, t.z - bike.position.z) < 60 || Math.hypot(t.x - bike.position.x, t.z - bike.position.z) > 260));
+    target.position.set(t.x, 0.08, t.z); orderStart = performance.now(); return;
+  }
+  const s = 30;
+  do target.position.set(((Math.random() * 12 - 6) | 0) * s, 0.08, ((Math.random() * 12 - 6) | 0) * s);
+  while (target.position.distanceTo(bike.position) < 45);
+  orderStart = performance.now();
+}
+
+// ================== שליטה ==================
+const keys = {};
+addEventListener('keydown', e => keys[e.code] = true);
+addEventListener('keyup', e => keys[e.code] = false);
+let tiltSteer = 0, usingTilt = false, touchGas = false, touchBrake = false;
+// היגוי כמו הגה: לפי כיוון הכבידה לאורך הצד הארוך של המסך (עובד בכל זווית החזקה, בעיקר לרוחב)
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let tiltFlip = 1; try { if (localStorage.getItem('p4tp-flip') === '-1') tiltFlip = -1; } catch (e) {}
+function onMotion(e) {
+  const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+  usingTilt = true;
+  const raw = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
+  const ang = ((raw % 360) + 360) % 360;
+  let gx = a.x, gy = a.y; if (IOS) { gx = -gx; gy = -gy; }      // באייפון הסימנים הפוכים
+  const gRight = ang === 90 ? -gy : ang === 270 ? gy : ang === 180 ? -gx : gx; // רכיב לאורך "ימין המסך"
+  const rightTurn = -gRight / 9.81 / Math.sin(CFG.TILT_MAX_DEG * Math.PI / 180) * tiltFlip;
+  let s = THREE.MathUtils.clamp(-rightTurn, -1, 1);                // במשחק: חיובי = שמאלה
+  const dz = CFG.TILT_DEADZONE; s = Math.abs(s) < dz ? 0 : Math.sign(s) * (Math.abs(s) - dz) / (1 - dz);
+  tiltSteer = s;
+}
+let motionOn = false;
+function enableTilt() { // נקרא ישירות מתוך הלחיצה – חובה באייפון. אף פעם לא חוסם את תחילת המשחק.
+  const listen = () => { if (!motionOn) { motionOn = true; addEventListener('devicemotion', onMotion); } };
+  try {
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+      DeviceMotionEvent.requestPermission()
+        .then(r => { if (r === 'granted') listen(); else flash('בלי הטיה – אפשר לנהוג עם הכפתורים', '#fff'); })
+        .catch(() => flash('בלי הטיה – אפשר לנהוג עם הכפתורים', '#fff'));
+    } else listen();
+  } catch (e) { listen(); }
+  // מסך מלא + נעילה לרוחב: עובד באנדרואיד. באייפון אין מסך מלא לדפדפן – מתעלמים בשקט.
+  try { const fs = document.documentElement.requestFullscreen; if (fs) fs.call(document.documentElement).then(() => screen.orientation?.lock?.('landscape')).catch(() => {}); } catch (e) {}
+}
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const hold = (el, set) => {
+  el.addEventListener('touchstart', e => { e.preventDefault(); set(true); }, { passive: false });
+  el.addEventListener('touchend', () => set(false)); el.addEventListener('touchcancel', () => set(false));
+};
+hold(document.getElementById('gas'), v => touchGas = v);
+hold(document.getElementById('brake'), v => touchBrake = v);
+document.getElementById('flip').onclick = () => { tiltFlip *= -1; try { localStorage.setItem('p4tp-flip', String(tiltFlip)); } catch (e) {} flash(tiltFlip > 0 ? 'היגוי רגיל' : 'היגוי הפוך'); };
+
+// ================== מצב משחק ==================
+let moving = 0, speed = 0, heading = 0, steerSm = 0, money = 0, deliveries = 0, running = false, shake = 0;
+const hud = { trays: document.getElementById('trays'), tip: document.getElementById('tip'), score: document.getElementById('score') };
+const msg = document.getElementById('msg'), toast = document.getElementById('toast');
+let toastT;
+function flash(text, color = '#ffd23f') {
+  toast.textContent = text; toast.style.color = color; toast.style.opacity = 1;
+  clearTimeout(toastT); toastT = setTimeout(() => toast.style.opacity = 0, 900);
+}
+const currentTip = () => Math.max(0, Math.round(CFG.TIP_START - (performance.now() - orderStart) / 1000));
+
+function startRound() {
+  bike.position.set(startPose.x, 0, startPose.z); heading = startPose.heading; speed = 0; steerSm = 0; bike.rotation.set(0, 0, 0);
+  money = 0; deliveries = 0;
+  buildStack(); placeTarget();
+  msg.classList.add('hidden'); running = true;
+  if (isTouch) { document.getElementById('touch').classList.remove('hidden'); document.getElementById('flip').classList.remove('hidden'); }
+}
+function endRound() {
+  running = false;
+  const fallen = trays.filter(t => t.state === 'fallen').length;
+  msg.innerHTML = `<h1>המשמרת נגמרה</h1><div>${deliveries} משלוחים · ₪${money}</div><div style="opacity:.8">${fallen} פיצות נשארו על הכביש</div><button id="again">עוד משמרת</button>`;
+  msg.classList.remove('hidden');
+  document.getElementById('again').onclick = startRound;
+}
+const startBtn = document.getElementById('start');
+function onStartTap(e) { if (running || startBtn.disabled) return; if (e) e.preventDefault(); enableTilt(); startRound(); }
+msg.addEventListener('click', onStartTap); // כל מסך הפתיחה לחיץ, לא רק הכפתור
+
+// ================== לולאה ==================
+const clock = new THREE.Clock();
+const camPos = new THREE.Vector3(0, 4, 9);
+const FIXED = 1 / 120;
+let camRoll = 0;
+function tick() {
+  const dt = Math.min(clock.getDelta(), 1 / 30);
+  if (running) {
+    const gas = keys.ArrowUp || keys.KeyW || touchGas;
+    const brake = keys.ArrowDown || keys.KeyS || keys.Space || touchBrake;
+    let steerIn = (keys.ArrowLeft || keys.KeyA ? 1 : 0) - (keys.ArrowRight || keys.KeyD ? 1 : 0);
+    if (usingTilt) steerIn = tiltSteer;
+    steerSm += (steerIn - steerSm) * Math.min(1, CFG.STEER_SMOOTH * dt); // הגה רך
+
+    if (gas) speed += CFG.ACCEL * Math.max(0.15, 1 - Math.max(0, speed) / CFG.MAX_SPEED) * dt; // כוח שנחלש ליד המהירות המרבית
+    if (brake) speed -= (speed > 0 ? CFG.BRAKE : CFG.ACCEL * 0.5) * dt;
+    speed -= speed * CFG.DRAG * dt;
+    if (!gas && !brake && Math.abs(speed) < 0.15) speed = 0;
+    speed = THREE.MathUtils.clamp(speed, -3, CFG.MAX_SPEED);
+
+    // קצב סיבוב מוגבל לפי תאוצה צידית – ככה הפיזיקה של הערימה מרגישה טבעית
+    const v = Math.abs(speed);
+    // בתנועה ההיגוי מסובב באמת. בעמידה – לא זז ממקומו, רק נטייה ויזואלית (למטה).
+    moving = Math.min(1, v / 2);
+    const maxYaw = v > 0.1 ? Math.min(CFG.TURN_RATE, CFG.MAX_LAT_ACC / v) : 0;
+    const yawRate = steerSm * moving * maxYaw * Math.sign(speed || 1);
+    heading += yawRate * dt;
+
+    const fwd = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
+    const next = bike.position.clone().addScaledVector(fwd, speed * dt);
+    const probe = new THREE.Box3().setFromCenterAndSize(next.clone().setY(1), new THREE.Vector3(0.8, 2, 0.8));
+    const hitHouse = (footprints.length || glbMap) && [[0.5, 0], [-0.5, 0], [0, 0.9], [0, -0.9]].some(([ox, oz]) => insideBuilding(next.x + ox * Math.cos(heading) + oz * -Math.sin(heading), next.z - ox * Math.sin(heading) + oz * -Math.cos(heading)));
+    if (hitHouse || obstacles.some(b => b.intersectsBox(probe))) { shake = Math.min(shake + Math.abs(speed) * 0.05, 0.6); speed = -speed * 0.25; }
+    else bike.position.copy(next);
+    bike.rotation.y = heading;
+    const lean = THREE.MathUtils.clamp(-Math.atan(speed * yawRate / 9.8), -0.35, 0.35); // השכבה כמו אופניים אמיתיים – מקזזת חלק מהכוח הצידי
+    bike.rotation.z += (lean - bike.rotation.z) * Math.min(1, 8 * dt);
+    // תגובה חיה להטיה בעמידה: הגוף והרוכב נוטים קלות (לא הארגז – כדי לא להזיז את הפיצות)
+    const idleLean = -steerSm * (1 - moving) * 0.18;
+    bikeBody.rotation.z += (idleLean - bikeBody.rotation.z) * Math.min(1, 10 * dt);
+    rider.rotation.z = bikeBody.rotation.z * 1.4;
+  }
+
+  // פיזיקה: הארגז זז במהירות אמיתית, הפיצות מגיבות בעצמן
+  if (dt > 1e-4) { // dt=0 => מהירות אינסופית לארגז => קריסה במנוע הפיזיקה
+    driveRack(dt);
+    try { world.step(FIXED, dt, 6); }
+    catch (e) { console.warn('physics step skipped', e); for (const t of trays) if (!isFinite(t.body.position.x)) { t.body.position.set(rackBody.position.x, rackBody.position.y + 0.3, rackBody.position.z); t.body.velocity.setZero(); t.body.angularVelocity.setZero(); } }
+  }
+  for (const t of trays) { t.mesh.position.copy(t.body.position); t.mesh.quaternion.copy(t.body.quaternion); }
+
+  if (running) {
+    // פיצה שהתרחקה מהארגז ונמוכה ממנו = עפה (גם לפני שנגעה ברצפה)
+    for (const t of trays) if (t.state === 'onBike') {
+      const dx = t.body.position.x - rackBody.position.x, dz = t.body.position.z - rackBody.position.z;
+      if (Math.hypot(dx, dz) > 1.4 && t.body.position.y < rackBody.position.y + 0.3) onTrayHitsGround(t);
+    }
+    // מסירה: לעצור בתוך העיגול
+    if (bike.position.distanceTo(target.position) < 3 && Math.abs(speed) < 0.6) {
+      const top = topTrayOnBike();
+      if (top) {
+        top.state = 'delivered'; world.removeBody(top.body); scene.remove(top.mesh);
+        const pay = CFG.BASE_PAY + currentTip(); money += pay; deliveries++;
+        flash(`נמסר! +₪${pay}`);
+        placeTarget();
+      }
+    }
+    if (onBikeCount() === 0) endRound();
+    hud.trays.textContent = `🍕 ${onBikeCount()}/${CFG.PIZZAS}`;
+    hud.tip.textContent = `טיפ: ${currentTip()}₪`;
+    hud.score.textContent = `₪${money} · ${deliveries} משלוחים`;
+  }
+  beacon.rotation.y += dt;
+  target.material.opacity = 0.55 + 0.25 * Math.sin(performance.now() / 250);
+
+  // מצלמת GTA: מאחור ומעל, עם השהיה רכה ורעידה קטנה במכות
+  const back = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+  const desired = bike.position.clone().addScaledVector(back, 7.5 + Math.abs(speed) * 0.12).add(new THREE.Vector3(0, 3.6, 0));
+  camPos.lerp(desired, 1 - Math.pow(0.002, dt));
+  camera.position.copy(camPos);
+  const fov = baseFov() + Math.abs(speed) * 0.5; if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, 3 * dt); camera.updateProjectionMatrix(); }
+  if (shake > 0) { camera.position.x += (Math.random() - .5) * shake; camera.position.y += (Math.random() - .5) * shake; shake = Math.max(0, shake - dt * 1.5); }
+  camera.lookAt(bike.position.clone().add(new THREE.Vector3(0, 1.6, 0)).addScaledVector(back, -4));
+  camRoll += (steerSm * 0.05 - camRoll) * Math.min(1, 6 * dt);   // המצלמה נוטה קלות עם ההטיה – תמיד, גם בעמידה
+  camera.rotateZ(camRoll);
+  sun.position.copy(bike.position).add(new THREE.Vector3(40, 70, 20)); sun.target.position.copy(bike.position);
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+await loadMap();
+await loadBike();
+bike.position.set(startPose.x, 0, startPose.z); heading = startPose.heading; bike.rotation.y = heading;
+camPos.set(startPose.x + Math.sin(heading) * 8, 4, startPose.z + Math.cos(heading) * 8);
+buildStack(); placeTarget();
+startBtn.disabled = false; startBtn.textContent = 'יאללה, לנסוע';
+tick();
+</script>
+</body>
+</html>
