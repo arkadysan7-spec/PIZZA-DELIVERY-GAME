@@ -100,7 +100,7 @@ scene.background = new THREE.Color(0x6ec6ff); // שמיים כחולים מצו�
 scene.fog = new THREE.Fog(0xbfe6ff, 90, 320);
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
 const baseFov = () => (innerWidth > innerHeight ? 58 : 72); // לרוחב = שדה ראייה רחב יותר ממילא
-scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 1.1));
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb09a78, 1.5));
 const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.06;
 Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, far: 300 });
@@ -413,7 +413,7 @@ async function loadGlbMap() {
         else { uv[i * 2] = 0.02; uv[i * 2 + 1] = 0.02; }
       }
       g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-      const JAFFA_PAL = [0xf7d39b, 0xf3b27a, 0xeea07a, 0xfbe6c2, 0xf5c6a0, 0xf0c27a]; // חול, משמש, טרקוטה, קרם, ורוד-חול, חרדל
+      const JAFFA_PAL = [0xf7d39b, 0xf5be8c, 0xf2b896, 0xfbe6c2, 0xf5c6a0, 0xf0c98a]; // חול, משמש, טרקוטה, קרם, ורוד-חול, חרדל
       mat = new THREE.MeshToonMaterial({ color: JAFFA_PAL[(parseInt(name.replace(/\D/g, '') || '0') + (name.includes('.') ? 3 : 0)) % JAFFA_PAL.length], map: WINDOWS, gradientMap: TOON });
     } else mat = new THREE.MeshToonMaterial({ color: fixed !== undefined ? fixed : color, gradientMap: TOON });
     const mesh = new THREE.Mesh(g, mat);
