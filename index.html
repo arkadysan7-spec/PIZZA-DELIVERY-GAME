@@ -70,7 +70,7 @@ const CFG = {
   MAP_URL: 'assets/jaffa.glb?v=3', // להעלות את המספר בכל עדכון מפה // יפו מ-Blender/Blosm (OSM) סביב מגדל השעון – נטען מהאתר עצמו, בלי תלות ב-Overpass
   OSM: true,              // גיבוי: אם ה-GLB לא נטען – בונים יפו בזמן אמת מ-OpenStreetMap
   MAP_BOUNDS: { minX: -440, maxX: 440, minZ: -390, maxZ: 390 }, // קצה מפת ה-GLB – קיר שקוף
-  BIKE_URL: null,         // מודל האופניים בעתיד
+  BIKE_URL: 'assets/bike.glb?v=2', // אופניים חשמליים + רוכב מצוירים (Blender). null = קוביות
   PIZZAS: 20,
   MAX_SPEED: 18,          // מ/ש
   ACCEL: 5, BRAKE: 8, DRAG: 0.5,
@@ -449,9 +449,10 @@ async function loadMap() {
 const bike = new THREE.Group(); scene.add(bike);
 const bikeBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 1.8), flat(CFG.RED));
 bikeBody.position.y = 0.7; bikeBody.castShadow = true; bike.add(bikeBody);
+const bikeWheels = [];
 for (const z of [-0.75, 0.75]) {
   const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.15, 10), flat(0x222222));
-  wheel.rotation.z = Math.PI / 2; wheel.position.set(0, 0.35, z); wheel.castShadow = true; bike.add(wheel);
+  wheel.rotation.z = Math.PI / 2; wheel.position.set(0, 0.35, z); wheel.castShadow = true; bike.add(wheel); bikeWheels.push(wheel);
 }
 const rider = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.8, 0.35), flat(CFG.YELLOW));
 rider.position.set(0, 1.4, 0.1); rider.castShadow = true; bike.add(rider);
@@ -460,6 +461,20 @@ const rackMesh = new THREE.Mesh(new THREE.BoxGeometry(RACK.w, RACK.h, RACK.w), f
 rackMesh.position.copy(RACK_OFFSET); bike.add(rackMesh);
 const plate = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.5, 0.04), [flat(CFG.RED), flat(CFG.RED), flat(CFG.RED), flat(CFG.RED), new THREE.MeshLambertMaterial({ map: BRAND }), flat(CFG.RED)]);
 plate.position.set(0, 0.7, 1.12); plate.castShadow = true; bike.add(plate); // שלט ממותג מאחור – מה שרואים מהמצלמה
+
+async function loadBike() { // מחליף את הקוביות במודל – אותם מקומות, אז הנטייה והפיזיקה לא משתנות
+  if (!CFG.BIKE_URL) return;
+  try {
+    const gltf = await new GLTFLoader().loadAsync(CFG.BIKE_URL);
+    const find = n => { for (const sc of gltf.scenes) { const o = sc.getObjectByName(n); if (o) return o; } throw new Error('missing ' + n); };
+    const frame = find('frame'), man = find('rider');
+    const toon = o => o.traverse(m => { if (m.isMesh) { m.material = new THREE.MeshToonMaterial({ color: m.material.color, gradientMap: TOON }); m.castShadow = true; addOutline(m, 40); } });
+    toon(frame); toon(man);
+    bikeBody.material.visible = false; rider.material.visible = false; bikeWheels.forEach(w => w.visible = false);
+    bikeBody.add(frame); frame.position.add(new THREE.Vector3(0, -0.7, 0));   // bikeBody יושב בגובה 0.7
+    rider.add(man); man.position.add(new THREE.Vector3(0, -1.4, -0.1));       // rider יושב ב-(0,1.4,0.1)
+  } catch (e) { console.warn('מודל האופניים לא נטען, נשארים עם הקוביות', e); }
+}
 
 // הארגז בפיזיקה = גוף קינמטי שעוקב אחרי האופניים. החיכוך שלו הוא מה שסוחב את הפיצות.
 const rackBody = new CANNON.Body({ type: CANNON.Body.KINEMATIC, material: matRack,
@@ -707,6 +722,7 @@ function tick() {
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
 await loadMap();
+await loadBike();
 bike.position.set(startPose.x, 0, startPose.z); heading = startPose.heading; bike.rotation.y = heading;
 camPos.set(startPose.x + Math.sin(heading) * 8, 4, startPose.z + Math.cos(heading) * 8);
 buildStack(); placeTarget();
