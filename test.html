@@ -326,7 +326,9 @@ async function loadGlbMap() {
     else if (name === 'road') { for (let i = 0; i < pos.count; i += 12) roadPts.push({ x: pos.getX(i), z: pos.getZ(i), dir: 0, type: 'residential' }); }
   });
   for (const [name, { color, geos }] of groups) {
-    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color, flatShading: true }));
+    const fixed = { road: 0x45454c, walk: 0xd8c8a4, ground: 0xcdbf9f, plaza: 0xe2d6bc, sea: 0x2f86bd }[name];
+    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color: fixed !== undefined ? fixed : color, flatShading: true }));
+    if (name === 'road') mesh.position.y = 0.01; // מעל המדרכה
     mesh.receiveShadow = true; mesh.castShadow = name.startsWith('stone');
     city.add(mesh);
   }
