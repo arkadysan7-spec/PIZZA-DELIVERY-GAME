@@ -67,8 +67,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ================== הגדרות (הכל לכוונון) ==================
 const CFG = {
-  MAP_URL: null,          // מפת GLB (אם תהיה). אחרת: יפו האמיתית מ-OpenStreetMap
-  OSM: true,              // בניינים ורחובות אמיתיים סביב מגדל השעון ביפו
+  MAP_URL: 'assets/jaffa.glb', // יפו מ-Blender/Blosm (OSM) סביב מגדל השעון – נטען מהאתר עצמו, בלי תלות ב-Overpass
+  OSM: true,              // גיבוי: אם ה-GLB לא נטען – בונים יפו בזמן אמת מ-OpenStreetMap
+  MAP_BOUNDS: { minX: -440, maxX: 440, minZ: -390, maxZ: 390 }, // קצה מפת ה-GLB – קיר שקוף
   BIKE_URL: null,         // מודל האופניים בעתיד
   PIZZAS: 20,
   MAX_SPEED: 18,          // מ/ש
@@ -274,6 +275,7 @@ function buildJaffa(data) {
   if (best) startPose = { x: best.x, z: best.z, heading: best.dir };
 }
 function insideBuilding(x, z) {
+  if (glbMap) return blockedAt(x, z);
   for (const f of footprints) {
     if (x < f.minX || x > f.maxX || z < f.minZ || z > f.maxZ) continue;
     let inside = false; const p = f.poly;
@@ -284,19 +286,71 @@ function insideBuilding(x, z) {
   }
   return false;
 }
+// ===== מפת GLB (Blender): התנגשות לפי משולשי הגגות (טביעת רגל אמיתית), גריד לחיפוש מהיר =====
+const CELL = 8, blockGrid = new Map();
+let glbMap = false;
+function addBlockTri(ax, az, bx, bz, cx, cz) {
+  const x0 = Math.floor(Math.min(ax, bx, cx) / CELL), x1 = Math.floor(Math.max(ax, bx, cx) / CELL);
+  const z0 = Math.floor(Math.min(az, bz, cz) / CELL), z1 = Math.floor(Math.max(az, bz, cz) / CELL);
+  for (let i = x0; i <= x1; i++) for (let k = z0; k <= z1; k++) {
+    const key = i + ',' + k; if (!blockGrid.has(key)) blockGrid.set(key, []);
+    blockGrid.get(key).push([ax, az, bx, bz, cx, cz]);
+  }
+}
+function inTri(px, pz, t) {
+  const [ax, az, bx, bz, cx, cz] = t;
+  const d1 = (px - bx) * (az - bz) - (ax - bx) * (pz - bz), d2 = (px - cx) * (bz - cz) - (bx - cx) * (pz - cz), d3 = (px - ax) * (cz - az) - (cx - ax) * (pz - az);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+function blockedAt(x, z) {
+  const B = CFG.MAP_BOUNDS; if (x < B.minX || x > B.maxX || z < B.minZ || z > B.maxZ) return true;
+  const cell = blockGrid.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL));
+  return !!cell && cell.some(t => inTri(x, z, t));
+}
+async function loadGlbMap() {
+  const gltf = await new GLTFLoader().loadAsync(CFG.MAP_URL);
+  gltf.scene.updateMatrixWorld(true);
+  const groups = new Map(); // איחוד לפי חומר => כמה draw calls בלבד (חשוב לטלפון)
+  gltf.scene.traverse(o => {
+    if (!o.isMesh) return;
+    let g = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    for (const a of Object.keys(g.attributes)) if (a !== 'position' && a !== 'normal') g.deleteAttribute(a);
+    if (g.index) g = g.toNonIndexed();
+    const name = o.material.name || 'x';
+    if (!groups.has(name)) groups.set(name, { color: o.material.color.clone(), geos: [] });
+    groups.get(name).geos.push(g);
+    const pos = g.attributes.position;
+    const tri = i => addBlockTri(pos.getX(i), pos.getZ(i), pos.getX(i + 1), pos.getZ(i + 1), pos.getX(i + 2), pos.getZ(i + 2));
+    if (name.startsWith('stone')) { for (let i = 0; i < pos.count; i += 3) if (pos.getY(i) > 1.5 && pos.getY(i + 1) > 1.5 && pos.getY(i + 2) > 1.5) tri(i); }
+    else if (name === 'sea') { for (let i = 0; i < pos.count; i += 3) tri(i); }
+    else if (name === 'road') { for (let i = 0; i < pos.count; i += 12) roadPts.push({ x: pos.getX(i), z: pos.getZ(i), dir: 0, type: 'residential' }); }
+  });
+  for (const [name, { color, geos }] of groups) {
+    const fixed = { road: 0x45454c, walk: 0xd8c8a4, ground: 0xcdbf9f, plaza: 0xe2d6bc, sea: 0x2f86bd }[name];
+    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color: fixed !== undefined ? fixed : color, flatShading: true }));
+    if (name === 'road') mesh.position.y = 0.01; // מעל המדרכה
+    mesh.receiveShadow = true; mesh.castShadow = name.startsWith('stone');
+    city.add(mesh);
+  }
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(1200, 3000), new THREE.MeshLambertMaterial({ color: 0x2f7fb5 })); // הים ממשיך מערבית לגבול
+  sea.rotation.x = -Math.PI / 2; sea.position.set(CFG.MAP_BOUNDS.minX - 610, 0.004, 0); city.add(sea);
+  glbMap = true;
+  // משאירים רק נקודות רחוב פנויות (לא בתוך בניין/ים)
+  for (let i = roadPts.length - 1; i >= 0; i--) if (blockedAt(roadPts[i].x, roadPts[i].z)) roadPts.splice(i, 1);
+  // התחלה: ליד מגדל השעון (ראשית המפה), פנים צפונה ברחוב יפת
+  let best = null; for (const r of roadPts) { const d = Math.hypot(r.x, r.z); if (!best || d < best.d) best = { ...r, d }; }
+  if (best) startPose = { x: best.x, z: best.z, heading: 0 };
+}
 async function loadMap() {
-  if (!CFG.MAP_URL && CFG.OSM) {
+  if (CFG.MAP_URL) {
+    try { await loadGlbMap(); return; }
+    catch (e) { console.warn('מפת GLB לא נטענה, מנסים OSM חי', e); glbMap = false; blockGrid.clear(); roadPts.length = 0; }
+  }
+  if (CFG.OSM) {
     try { buildJaffa(await fetchJaffa()); return; }
     catch (e) { console.warn('יפו לא נטענה, עוברים לעיר זמנית', e); }
   }
-  if (!CFG.MAP_URL) return buildPlaceholderCity();
-  try {
-    const gltf = await new GLTFLoader().loadAsync(CFG.MAP_URL);
-    gltf.scene.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
-    city.add(gltf.scene);
-    gltf.scene.updateMatrixWorld(true);
-    gltf.scene.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o); if (b.max.y - b.min.y > 2) addStaticBox(b); } });
-  } catch (e) { console.warn('טעינת המפה נכשלה, עוברים לפלייסהולדר', e); buildPlaceholderCity(); }
+  buildPlaceholderCity();
 }
 
 // ================== אופניים (פלייסהולדר) ==================
@@ -499,7 +553,7 @@ function tick() {
     const fwd = new THREE.Vector3(-Math.sin(heading), 0, -Math.cos(heading));
     const next = bike.position.clone().addScaledVector(fwd, speed * dt);
     const probe = new THREE.Box3().setFromCenterAndSize(next.clone().setY(1), new THREE.Vector3(0.8, 2, 0.8));
-    const hitHouse = footprints.length && [[0.5, 0], [-0.5, 0], [0, 0.9], [0, -0.9]].some(([ox, oz]) => insideBuilding(next.x + ox * Math.cos(heading) + oz * -Math.sin(heading), next.z - ox * Math.sin(heading) + oz * -Math.cos(heading)));
+    const hitHouse = (footprints.length || glbMap) && [[0.5, 0], [-0.5, 0], [0, 0.9], [0, -0.9]].some(([ox, oz]) => insideBuilding(next.x + ox * Math.cos(heading) + oz * -Math.sin(heading), next.z - ox * Math.sin(heading) + oz * -Math.cos(heading)));
     if (hitHouse || obstacles.some(b => b.intersectsBox(probe))) { shake = Math.min(shake + Math.abs(speed) * 0.05, 0.6); speed = -speed * 0.25; }
     else bike.position.copy(next);
     bike.rotation.y = heading;
