@@ -658,8 +658,11 @@ function tick() {
   }
 
   // פיזיקה: הארגז זז במהירות אמיתית, הפיצות מגיבות בעצמן
-  driveRack(dt);
-  world.step(FIXED, dt, 6);
+  if (dt > 1e-4) { // dt=0 => מהירות אינסופית לארגז => קריסה במנוע הפיזיקה
+    driveRack(dt);
+    try { world.step(FIXED, dt, 6); }
+    catch (e) { console.warn('physics step skipped', e); for (const t of trays) if (!isFinite(t.body.position.x)) { t.body.position.set(rackBody.position.x, rackBody.position.y + 0.3, rackBody.position.z); t.body.velocity.setZero(); t.body.angularVelocity.setZero(); } }
+  }
   for (const t of trays) { t.mesh.position.copy(t.body.position); t.mesh.quaternion.copy(t.body.quaternion); }
 
   if (running) {
