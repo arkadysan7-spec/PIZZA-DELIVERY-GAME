@@ -496,7 +496,7 @@ function driveRack(dt) { // מזיזים את הגוף הקינמטי במהיר
   const cq = new THREE.Quaternion(rackBody.quaternion.x, rackBody.quaternion.y, rackBody.quaternion.z, rackBody.quaternion.w);
   const dq = q.clone().multiply(cq.invert());
   if (dq.w < 0) { dq.x *= -1; dq.y *= -1; dq.z *= -1; dq.w *= -1; }
-  const angle = 2 * Math.acos(Math.min(1, dq.w)), s = Math.sqrt(1 - dq.w * dq.w);
+  dq.normalize(); const angle = 2 * Math.acos(Math.min(1, dq.w)), s = Math.sqrt(Math.max(0, 1 - dq.w * dq.w)); // max(0) – בלי NaN מעיגול
   if (s < 1e-6) rackBody.angularVelocity.setZero();
   else rackBody.angularVelocity.set(dq.x / s * angle / dt, dq.y / s * angle / dt, dq.z / s * angle / dt);
 }
@@ -675,7 +675,7 @@ function tick() {
   if (dt > 1e-4) { // dt=0 => מהירות אינסופית לארגז => קריסה במנוע הפיזיקה
     driveRack(dt);
     try { world.step(FIXED, dt, 6); }
-    catch (e) { console.warn('physics step skipped', e); for (const t of trays) if (!isFinite(t.body.position.x)) { t.body.position.set(rackBody.position.x, rackBody.position.y + 0.3, rackBody.position.z); t.body.velocity.setZero(); t.body.angularVelocity.setZero(); } }
+    catch (e) { console.warn('physics step skipped', e); if (!isFinite(rackBody.quaternion.w)) { rackBody.quaternion.set(0, 0, 0, 1); rackBody.angularVelocity.setZero(); snapRack(); } for (const t of trays) if (!isFinite(t.body.position.x)) { t.body.position.set(rackBody.position.x, rackBody.position.y + 0.3, rackBody.position.z); t.body.velocity.setZero(); t.body.angularVelocity.setZero(); } }
   }
   for (const t of trays) { t.mesh.position.copy(t.body.position); t.mesh.quaternion.copy(t.body.quaternion); }
 
