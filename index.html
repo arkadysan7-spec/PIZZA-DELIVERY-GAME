@@ -67,7 +67,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // ================== הגדרות (הכל לכוונון) ==================
 const CFG = {
-  MAP_URL: 'assets/jaffa.glb?v=2', // להעלות את המספר בכל עדכון מפה // יפו מ-Blender/Blosm (OSM) סביב מגדל השעון – נטען מהאתר עצמו, בלי תלות ב-Overpass
+  MAP_URL: 'assets/jaffa.glb?v=3', // להעלות את המספר בכל עדכון מפה // יפו מ-Blender/Blosm (OSM) סביב מגדל השעון – נטען מהאתר עצמו, בלי תלות ב-Overpass
   OSM: true,              // גיבוי: אם ה-GLB לא נטען – בונים יפו בזמן אמת מ-OpenStreetMap
   MAP_BOUNDS: { minX: -440, maxX: 440, minZ: -390, maxZ: 390 }, // קצה מפת ה-GLB – קיר שקוף
   BIKE_URL: null,         // מודל האופניים בעתיד
@@ -96,16 +96,34 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xa9cbe6);
-scene.fog = new THREE.Fog(0xcfe0ea, 60, 220); // אובך ים תיכוני
+scene.background = new THREE.Color(0x6ec6ff); // שמיים כחולים מצוירים
+scene.fog = new THREE.Fog(0xbfe6ff, 90, 320);
 const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 600);
 const baseFov = () => (innerWidth > innerHeight ? 58 : 72); // לרוחב = שדה ראייה רחב יותר ממילא
-scene.add(new THREE.HemisphereLight(0xffffff, 0x6b5b45, 0.9));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a60, 1.1));
+const sun = new THREE.DirectionalLight(0xfff1dc, 1.6);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.06;
 Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, far: 300 });
 scene.add(sun, sun.target);
-const flat = (c) => new THREE.MeshLambertMaterial({ color: c, flatShading: true });
+// ===== סגנון מצויר: תאורה ב-3 מדרגות (toon) =====
+const TOON = new THREE.DataTexture(new Uint8Array([130, 195, 255]), 3, 1, THREE.RedFormat);
+TOON.minFilter = TOON.magFilter = THREE.NearestFilter; TOON.needsUpdate = true;
+const flat = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: TOON });
+const OUTLINE = new THREE.LineBasicMaterial({ color: 0x3a2414 });
+const addOutline = (mesh, angle = 30) => { mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), OUTLINE)); return mesh; };
+// חלון יפואי: מסגרת לבנה, זכוכית, תריסים ירוקים – טקסטורה שחוזרת על הקירות
+function windowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#3f9a63'; g.fillRect(14, 16, 7, 32); g.fillRect(43, 16, 7, 32);   // תריסים
+  g.fillStyle = '#f7f2e6'; g.fillRect(21, 15, 22, 34);                             // מסגרת
+  g.fillStyle = '#2f6d8f'; g.fillRect(24, 18, 16, 28);                             // זכוכית
+  g.fillStyle = '#7fc3e6'; g.fillRect(24, 18, 5, 28);                              // ברק
+  g.fillStyle = '#3a2414'; g.fillRect(21, 49, 22, 3);                              // אדן
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4; return t;
+}
+const WINDOWS = windowTexture();
 
 // ===== מיתוג (טקסטורה מצוירת בקוד) =====
 function brandTexture() {
@@ -307,6 +325,63 @@ function blockedAt(x, z) {
   const cell = blockGrid.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL));
   return !!cell && cell.some(t => inTri(x, z, t));
 }
+function buildRoadNet(list) {
+  const W = { primary: 12, secondary: 10, tertiary: 8, residential: 6.5, unclassified: 6, living_street: 5, pedestrian: 4.5, service: 4, footway: 2.5, steps: 2.5 };
+  const LANE = { primary: 1, secondary: 1, tertiary: 1, residential: 1, unclassified: 1 };
+  const asphalt = [], stone = [], dash = [];
+  const ribbon = (pts, w) => {
+    const pos = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      let dx = b[0] - a[0], dz = b[1] - a[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      pos.push([pts[i][0] - dz * w, pts[i][1] + dx * w], [pts[i][0] + dz * w, pts[i][1] - dx * w]);
+    }
+    const v = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [l0, r0] = [pos[i * 2], pos[i * 2 + 1]], [l1, r1] = [pos[i * 2 + 2], pos[i * 2 + 3]];
+      v.push(l0[0], 0, l0[1], r0[0], 0, r0[1], l1[0], 0, l1[1], r0[0], 0, r0[1], r1[0], 0, r1[1], l1[0], 0, l1[1]);
+    }
+    for (const p of pts) for (let k = 0; k < 8; k++) { // עיגול בכל צומת/פנייה – בלי חורים
+      const t0 = k / 8 * Math.PI * 2, t1 = (k + 1) / 8 * Math.PI * 2;
+      v.push(p[0], 0, p[1], p[0] + Math.cos(t1) * w, 0, p[1] + Math.sin(t1) * w, p[0] + Math.cos(t0) * w, 0, p[1] + Math.sin(t0) * w);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    const n = new Float32Array(v.length); for (let i = 1; i < n.length; i += 3) n[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(n, 3));
+    return g;
+  };
+  for (const [pts, type] of list) {
+    const w = (W[type] || 4) / 2;
+    (type === 'pedestrian' || type === 'footway' || type === 'steps' ? stone : asphalt).push(ribbon(pts, w));
+    if (!['footway', 'steps', 'service', 'pedestrian'].includes(type)) for (let i = 0; i < pts.length; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      roadPts.push({ x: pts[i][0], z: pts[i][1], dir: Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])), type });
+    }
+    if (LANE[type]) { // קו צהוב מקווקו באמצע
+      let carry = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[i + 1], L = Math.hypot(bx - ax, bz - az); if (L < 0.1) continue;
+        const ux = (bx - ax) / L, uz = (bz - az) / L;
+        for (let t = carry; t < L; t += 6) {
+          const t2 = Math.min(L, t + 2.6), x0 = ax + ux * t, z0 = az + uz * t, x1 = ax + ux * t2, z1 = az + uz * t2, hw = 0.13;
+          dash.push(x0 - uz * hw, 0, z0 + ux * hw, x0 + uz * hw, 0, z0 - ux * hw, x1 - uz * hw, 0, z1 + ux * hw,
+                    x0 + uz * hw, 0, z0 - ux * hw, x1 + uz * hw, 0, z1 - ux * hw, x1 - uz * hw, 0, z1 + ux * hw);
+          carry = t + 6 - L;
+        }
+      }
+    }
+  }
+  const lay = (geos, color, y) => { if (!geos.length) return; const m = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshToonMaterial({ color, gradientMap: TOON, side: THREE.DoubleSide })); m.position.y = y; m.receiveShadow = true; city.add(m); };
+  lay(stone, 0xf0d2a0, 0.03); lay(asphalt, 0x5d6272, 0.045);
+  if (dash.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(dash, 3)); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffd23f, side: THREE.DoubleSide })); m.position.y = 0.06; city.add(m); }
+}
+function addClouds() { // עננים מצוירים – לבנים, בלי ערפל
+  const mat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: TOON, fog: false }), geo = new THREE.SphereGeometry(1, 10, 8);
+  for (let c = 0; c < 14; c++) {
+    const a = c / 14 * Math.PI * 2 + Math.random() * 0.3, r = 260 + Math.random() * 120, cl = new THREE.Group();
+    for (let k = 0; k < 5; k++) { const s = new THREE.Mesh(geo, mat); const sz = 9 + Math.random() * 8; s.scale.set(sz, sz * 0.65, sz); s.position.set(k * 11 - 22, Math.random() * 5, Math.random() * 6); cl.add(s); }
+    cl.position.set(Math.cos(a) * r, 70 + Math.random() * 30, Math.sin(a) * r); cl.lookAt(0, cl.position.y, 0); city.add(cl);
+  }
+}
 async function loadGlbMap() {
   const gltf = await new GLTFLoader().loadAsync(CFG.MAP_URL);
   gltf.scene.updateMatrixWorld(true);
@@ -323,15 +398,32 @@ async function loadGlbMap() {
     const tri = i => addBlockTri(pos.getX(i), pos.getZ(i), pos.getX(i + 1), pos.getZ(i + 1), pos.getX(i + 2), pos.getZ(i + 2));
     if (name.startsWith('stone')) { for (let i = 0; i < pos.count; i += 3) if (pos.getY(i) > 1.5 && pos.getY(i + 1) > 1.5 && pos.getY(i + 2) > 1.5) tri(i); }
     else if (name === 'sea') { for (let i = 0; i < pos.count; i += 3) tri(i); }
-    else if (name === 'road') { for (let i = 0; i < pos.count; i += 12) roadPts.push({ x: pos.getX(i), z: pos.getZ(i), dir: 0, type: 'residential' }); }
   });
   for (const [name, { color, geos }] of groups) {
-    const fixed = { road: 0x45454c, walk: 0xd8c8a4, ground: 0xcdbf9f, plaza: 0xe2d6bc, sea: 0x2f86bd }[name];
-    const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color: fixed !== undefined ? fixed : color, flatShading: true }));
-    if (name === 'road') mesh.position.y = 0.01; // מעל המדרכה
+    if (name === 'road' || name === 'walk') continue; // רחובות נבנים מחדש מ-jaffa_roads.json (רוחב לפי סוג + קו צהוב)
+    const fixed = { ground: 0xf2d9a6, plaza: 0xf5e2b8, sea: 0x1e9bff }[name];
+    const g = mergeGeometries(geos);
+    let mat;
+    if (name.startsWith('stone') && !name.includes('tower')) {
+      // UV לחלונות: לאורך הקיר כל 3.2 מ', קומה כל 3.4 מ'. גגות -> שוליים לבנים של הטקסטורה
+      const pos = g.attributes.position, nor = g.attributes.normal, uv = new Float32Array(pos.count * 2);
+      for (let i = 0; i < pos.count; i++) {
+        const nx = nor.getX(i), ny = nor.getY(i), nz = nor.getZ(i);
+        if (Math.abs(ny) < 0.3) { uv[i * 2] = (pos.getX(i) * -nz + pos.getZ(i) * nx) / 3.2; uv[i * 2 + 1] = pos.getY(i) / 3.4; }
+        else { uv[i * 2] = 0.02; uv[i * 2 + 1] = 0.02; }
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      const JAFFA_PAL = [0xf7d39b, 0xf3b27a, 0xeea07a, 0xfbe6c2, 0xf5c6a0, 0xf0c27a]; // חול, משמש, טרקוטה, קרם, ורוד-חול, חרדל
+      mat = new THREE.MeshToonMaterial({ color: JAFFA_PAL[(parseInt(name.replace(/\D/g, '') || '0') + (name.includes('.') ? 3 : 0)) % JAFFA_PAL.length], map: WINDOWS, gradientMap: TOON });
+    } else mat = new THREE.MeshToonMaterial({ color: fixed !== undefined ? fixed : color, gradientMap: TOON });
+    const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true; mesh.castShadow = name.startsWith('stone');
+    if (name.startsWith('stone')) addOutline(mesh);
     city.add(mesh);
   }
+  try { buildRoadNet(await (await fetch('assets/jaffa_roads.json?v=1')).json()); }
+  catch (e) { console.warn('רחובות לא נטענו', e); }
+  addClouds();
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(1200, 3000), new THREE.MeshLambertMaterial({ color: 0x2f7fb5 })); // הים ממשיך מערבית לגבול
   sea.rotation.x = -Math.PI / 2; sea.position.set(CFG.MAP_BOUNDS.minX - 610, 0.004, 0); city.add(sea);
   glbMap = true;
@@ -339,7 +431,7 @@ async function loadGlbMap() {
   for (let i = roadPts.length - 1; i >= 0; i--) if (blockedAt(roadPts[i].x, roadPts[i].z)) roadPts.splice(i, 1);
   // התחלה: ליד מגדל השעון (ראשית המפה), פנים צפונה ברחוב יפת
   let best = null; for (const r of roadPts) { const d = Math.hypot(r.x, r.z); if (!best || d < best.d) best = { ...r, d }; }
-  if (best) startPose = { x: best.x, z: best.z, heading: 0 };
+  if (best) startPose = { x: best.x, z: best.z, heading: best.dir };
 }
 async function loadMap() {
   if (CFG.MAP_URL) {
