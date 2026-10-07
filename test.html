@@ -70,7 +70,7 @@ const CFG = {
   MAP_URL: 'assets/jaffa.glb?v=3', // להעלות את המספר בכל עדכון מפה // יפו מ-Blender/Blosm (OSM) סביב מגדל השעון – נטען מהאתר עצמו, בלי תלות ב-Overpass
   OSM: true,              // גיבוי: אם ה-GLB לא נטען – בונים יפו בזמן אמת מ-OpenStreetMap
   MAP_BOUNDS: { minX: -440, maxX: 440, minZ: -390, maxZ: 390 }, // קצה מפת ה-GLB – קיר שקוף
-  BIKE_URL: 'assets/bike.glb?v=1', // אופניים חשמליים + רוכב מצוירים (Blender). null = קוביות
+  BIKE_URL: 'assets/bike.glb?v=2', // אופניים חשמליים + רוכב מצוירים (Blender). null = קוביות
   PIZZAS: 20,
   MAX_SPEED: 18,          // מ/ש
   ACCEL: 5, BRAKE: 8, DRAG: 0.5,
@@ -466,7 +466,8 @@ async function loadBike() { // מחליף את הקוביות במודל – א�
   if (!CFG.BIKE_URL) return;
   try {
     const gltf = await new GLTFLoader().loadAsync(CFG.BIKE_URL);
-    const frame = gltf.scene.getObjectByName('frame'), man = gltf.scene.getObjectByName('rider');
+    const find = n => { for (const sc of gltf.scenes) { const o = sc.getObjectByName(n); if (o) return o; } throw new Error('missing ' + n); };
+    const frame = find('frame'), man = find('rider');
     const toon = o => o.traverse(m => { if (m.isMesh) { m.material = new THREE.MeshToonMaterial({ color: m.material.color, gradientMap: TOON }); m.castShadow = true; addOutline(m, 40); } });
     toon(frame); toon(man);
     bikeBody.material.visible = false; rider.material.visible = false; bikeWheels.forEach(w => w.visible = false);
