@@ -154,7 +154,7 @@ function woodPlanks(c, w, h, vertical, tones, plankCount) {
 const wallTex = canvasTex(1024, 512, (c, w, h) => woodPlanks(c, w, h, true, ['#6b3b20', '#74432a', '#633519', '#7a4729', '#6e3e22'], 8), [3, 1]);
 const tableTex = canvasTex(1024, 1024, (c, w, h) => woodPlanks(c, w, h, false, ['#8a5530', '#93603a', '#7f4c2a', '#9a6740'], 6), [2, 2]);
 const wall = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshStandardMaterial({ map: wallTex, roughness: .9 }));
-wall.position.set(0, 8, -7); wall.receiveShadow = true; scene.add(wall);
+wall.position.set(0, 8, -7); scene.add(wall);
 const table = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), new THREE.MeshStandardMaterial({ map: tableTex, roughness: .75 }));
 table.rotation.x = -Math.PI / 2; table.position.set(0, TABLE_Y, 6); table.receiveShadow = true; scene.add(table);
 
