@@ -527,13 +527,13 @@ function clearWorld() {
   items = []; halves = []; flying = []; parts = []; splats = []; popups = [];
 }
 function showMenu() {
-  state = 'menu'; clearWorld();
+  state = 'menu'; clearWorld(); sign.visible = false;
   disposePizza(pizza); pizza = makePizza(); pizza.phase = 'ready'; order = null;
   $('menu').classList.remove('hidden'); $('over').classList.add('hidden');
   const it = spawnItem('corn', 0, ndcToZ0(0, -.22).y); it.menu = true; it.vel.set(0, 0, 0);
 }
 function startGame() {
-  clearWorld(); state = 'play'; score = 0; lives = CFG.LIVES; orderNo = 0; pizzasDone = 0;
+  clearWorld(); state = 'play'; sign.visible = true; score = 0; lives = CFG.LIVES; orderNo = 0; pizzasDone = 0;
   $('menu').classList.add('hidden'); $('over').classList.add('hidden');
   newOrder();
 }
@@ -826,6 +826,15 @@ function drawTicket() {
   g2.fillStyle = 'rgba(42,18,16,.12)'; g2.fillRect(x + 8, y + th - 7, tw - 16, 3);
   g2.fillStyle = k > .35 ? '#2f8a3c' : RED; g2.fillRect(x + tw - 8 - (tw - 16) * k, y + th - 7, (tw - 16) * k, 3);
 }
+
+/* ---------- כלי בדיקה ---------- */
+window.__dbg = {
+  info: () => ({ state, score, lives, orderNo, items: items.map(i => i.kind + ':' + i.state), halves: halves.length, flying: flying.length, landed: pizza ? pizza.landed.length : 0, got: order && order.got }),
+  step: (n = 60) => { for (let i = 0; i < n; i++) update(1 / 60); renderer.render(scene, camera); draw2D(); },
+  slice: (wrong = false) => { const it = items.find(i => i.state === 'fall' && !i.menu && order && ((i.kind in order.need) !== wrong));
+    if (it) { sliceItem(it, .8, .6); return it.kind; } return null; },
+  start: () => startGame(),
+};
 
 /* ---------- התחלה ---------- */
 layout();
