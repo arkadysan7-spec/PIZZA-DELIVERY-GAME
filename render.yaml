@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: lel-hamitzpor
+    runtime: node
+    rootDir: mitzpor
+    buildCommand: "true"
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LOG_CALLS
+        value: "1"

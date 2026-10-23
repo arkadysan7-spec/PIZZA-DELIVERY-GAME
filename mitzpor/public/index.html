@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#05060f">
+<title>ליל המצפור</title>
+<meta name="description" content="מישהי מהמצפור מנסה להשיג אותך. שיחה של דקה, ואז הפוסטר.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Karantina:wght@300;400;700&family=Rubik:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+
+<!-- 1. כניסה: לחיצה אחת שפותחת סאונד ומיקרופון -->
+<section id="s-enter" class="screen active">
+  <div class="enter-top">
+    <div class="presenter" data-ev="presenter">OBSESSION</div>
+    <div class="presents">מציגים</div>
+  </div>
+  <h1 class="title" data-ev="title">ליל המצפור</h1>
+  <p class="tease">מישהי למעלה על המצפור<br>מנסה להשיג אותך.</p>
+  <button id="btn-enter" class="btn-enter">להיכנס</button>
+  <p class="fine">סאונד פתוח · מיקרופון · פחות מדקה</p>
+</section>
+
+<!-- 2. שיחה נכנסת -->
+<section id="s-ring" class="screen">
+  <div class="ring-label" id="ring-label">שיחה נכנסת</div>
+  <div class="caller">
+    <div class="avatar ringing"><span class="halo"></span><span class="halo h2"></span><svg viewBox="0 0 100 100" class="scope"><circle cx="33" cy="50" r="20"/><circle cx="67" cy="50" r="20"/><rect x="45" y="44" width="10" height="12" rx="3"/></svg></div>
+    <div class="caller-name">נוגה</div>
+    <div class="caller-sub">המצפור · <span data-ev="title">ליל המצפור</span></div>
+  </div>
+  <div class="ring-actions">
+    <button id="btn-decline" class="round decline" aria-label="דחייה"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1 0-1.36C3.32 8.85 7.46 7.1 12 7.1s8.68 1.75 11.71 4.62c.18.18.29.43.29.7 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></button>
+    <button id="btn-answer" class="round answer" aria-label="מענה"><svg viewBox="0 0 24 24"><path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg></button>
+  </div>
+</section>
+
+<!-- 3. בשיחה -->
+<section id="s-call" class="screen">
+  <div class="call-head">
+    <div class="call-name">נוגה · המצפור</div>
+    <div class="call-timer" id="call-timer">00:00</div>
+  </div>
+  <div class="call-center">
+    <div class="avatar live" id="live-avatar"><span class="pulse" id="pulse"></span><svg viewBox="0 0 100 100" class="scope"><circle cx="33" cy="50" r="20"/><circle cx="67" cy="50" r="20"/><rect x="45" y="44" width="10" height="12" rx="3"/></svg></div>
+    <div class="status" id="status">מתחבר…</div>
+  </div>
+  <div class="caption" aria-live="polite"><div id="caption"></div></div>
+  <div class="you" id="you"><span></span><span></span><span></span></div>
+  <div class="time-bar"><i id="time-bar"></i></div>
+  <button id="btn-hangup" class="round decline small" aria-label="ניתוק"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1 0-1.36C3.32 8.85 7.46 7.1 12 7.1s8.68 1.75 11.71 4.62c.18.18.29.43.29.7 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg></button>
+</section>
+
+<!-- 4. סוף + פוסטר -->
+<section id="s-end" class="screen">
+  <div class="ended" id="ended">השיחה הסתיימה <span id="ended-time">00:00</span></div>
+  <div class="poster-wrap" id="poster-wrap"><canvas id="poster" width="1080" height="1920"></canvas></div>
+  <div class="end-actions" id="end-actions">
+    <button id="btn-share" class="btn">שיתוף</button>
+    <button id="btn-save" class="btn ghost">שמירה</button>
+    <a id="btn-tickets" class="btn hot" target="_blank" rel="noopener" hidden>כרטיסים</a>
+    <button id="btn-again" class="link">להתקשר שוב</button>
+  </div>
+</section>
+
+<!-- 5. תקלות -->
+<section id="s-error" class="screen">
+  <div class="err-icon">✦</div>
+  <p class="err-msg" id="err-msg"></p>
+  <button id="btn-retry" class="btn">לנסות שוב</button>
+  <button id="btn-demo" class="link">לראות פוסטר לדוגמה</button>
+</section>
+
+<div id="debug" hidden></div>
+<script src="audio.js"></script>
+<script src="poster.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

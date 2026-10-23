@@ -1,0 +1,12 @@
+{
+  "name": "lel-hamitzpor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ליל המצפור: שיחה קולית של דקה עם נוגה מהמצפור, ואז פוסטר אישי",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node tools/check-calls.js"
+  },
+  "engines": { "node": ">=20" }
+}
