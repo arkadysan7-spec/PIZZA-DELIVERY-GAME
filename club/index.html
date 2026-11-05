@@ -227,9 +227,9 @@ const CFG = {
   MUSIC_URL: '',      // הטראק שלך, למשל 'club.mp3' באותה תיקייה. ריק = ביט אלקטרו-פאנק מובנה
   BPM: 112,           // ה-BPM של הטראק. הרוקדים זזים לפיו
   BEAT_OFFSET: 0,     // שניות מתחילת הטראק עד הביט הראשון
-  WALK: 2.1,          // מהירות מקסימלית במטרים לשנייה
-  SLOSH: 1.5,         // מעל המהירות הזאת הבירה נשפכת לאט
-  GAS_ACCEL: 1.1,     // כמה מהר הגז מאיץ (מ'/ש'²). כמה שנמוך יותר, יותר זמן עד שהבירה נשפכת
+  WALK: 1.6,          // מהירות מקסימלית במטרים לשנייה
+  SLOSH: 1.15,        // מעל המהירות הזאת הבירה נשפכת לאט
+  GAS_ACCEL: .85,     // כמה מהר הגז מאיץ (מ'/ש'²). כמה שנמוך יותר, יותר זמן עד שהבירה נשפכת
   BRAKE: 3.6,         // כמה מהר הוא נעצר כשעוזבים את הגז
   TURN: 6,            // כמה מהר הוא מסתובב לכיוון הג'ויסטיק
   CAM_FOLLOW: 1.8,    // כמה מהר המצלמה חוזרת אל מאחוריו
@@ -722,6 +722,11 @@ function updateCrowd(dt, beat){
     IM.hairLong.setMatrixAt(i, d.female ? R.parts.hairLong.matrixWorld : ZERO);
     IM.skirt.setMatrixAt(i, d.female ? R.parts.skirt.matrixWorld : ZERO);
     _m4.compose(_p3.set(d.x, .012, d.z), _q.identity(), _s3.set(.95*d.w, 1, .95*d.w)); IM.shadow.setMatrixAt(i, _m4);
+    // anyone standing right in front of the lens is hidden so they don't block the view
+    if (Math.hypot(d.x - camera.position.x, d.z - camera.position.z) < 1.25 && camera.position.y < 4){
+      for (const k of ['torso','head','hair','hairLong','skirt']) IM[k].setMatrixAt(i, ZERO);
+      for (const k of ['leg','arm']){ IM[k].setMatrixAt(2*i, ZERO); IM[k].setMatrixAt(2*i+1, ZERO); }
+    }
   }
   for (const k in IM) IM[k].instanceMatrix.needsUpdate = true;
 }
@@ -891,7 +896,7 @@ const G = { state:'menu', level: 1, beer: 100, time: 0, charges: 3, stateT: 0 };
 let LC = levelCfg(1);
 const PL = { pos: START.clone(), vel: new THREE.Vector3(), knock: new THREE.Vector3(), speed: 0, yaw: Math.PI, walk: 0, stagger: 0, hitCD: 0, tilt: 0, slosh: false, sloshT: 0 };
 const _sec = new THREE.Vector3();
-const cam = { secPos: new THREE.Vector3(), mode:'menu', yaw: Math.PI, pitch: .42, shake: 0, ctrl: new THREE.Vector3(0,0,-1), grace: 0, look: new THREE.Vector3(0,1,0), cut: true, t: 0 };
+const cam = { secPos: new THREE.Vector3(), mode:'menu', yaw: Math.PI, pitch: .36, shake: 0, ctrl: new THREE.Vector3(0,0,-1), grace: 0, look: new THREE.Vector3(0,1,0), cut: true, t: 0 };
 const SW = { timer: 0, warned: false, active: null, left: 0, dur: 1, last: null };
 const MODE_LABEL = { security:'מצלמת אבטחה', dj:'הזווית של הדיג׳יי', bar:'מאחורי הבר', drunk:'סחרחורת', broadcast:'מבט על' };
 
@@ -980,9 +985,9 @@ function updateSwitches(dt){
 const _cp = new THREE.Vector3(), _ct = new THREE.Vector3(), _f = new THREE.Vector3(), _cf = new THREE.Vector3();
 function followPose(out, tgt){
   const p = PL.pos, f = _f.set(Math.sin(cam.yaw), 0, Math.cos(cam.yaw));
-  const d = 3.9 + cam.pitch*1.8, h = 1.2 + d*Math.sin(cam.pitch) + .35, back = d*Math.cos(cam.pitch);
+  const d = 2.55 + cam.pitch*1.1, h = 1.3 + d*Math.sin(cam.pitch) + .15, back = d*Math.cos(cam.pitch);
   out.set(clamp(p.x - f.x*back, -HX+.9, HX-.9), Math.min(h, H-.6), clamp(p.z - f.z*back, -HZ+.8, HZ-.5));
-  tgt.set(p.x + f.x*1.4, 1.1 - cam.pitch*.3, p.z + f.z*1.4);
+  tgt.set(p.x + f.x*1.6, 1.15 - cam.pitch*.3, p.z + f.z*1.6);
   return f;
 }
 function updateCamera(dt, t, beat){
@@ -1032,7 +1037,7 @@ function contact(d, n){
   const sp = PL.speed; let amt = 0;
   if (d.cur === ST.COUPLE) amt = 11 + sp*4;
   else if (d.cur === ST.BIG) amt = 13 + sp*4;
-  else if (sp > .7) amt = (d.cur === ST.PUMP ? 7 : d.cur === ST.WANDER ? 8 : 5) + sp*3;
+  else if (sp > .55) amt = (d.cur === ST.PUMP ? 7 : d.cur === ST.WANDER ? 8 : 5) + sp*3;
   if (amt > 0) hit(amt, n); else { PL.speed *= .55; if (sp > .25){ PL.hitCD = .35; AudioSys.bump(); } }
 }
 function collide(){
@@ -1141,7 +1146,7 @@ function updateClub(dt, t, beat){
 }
 
 /* ---------------- flow ---------------- */
-function resetPlayer(){ PL.pos.copy(START); PL.vel.set(0,0,0); PL.knock.set(0,0,0); PL.speed = 0; input.gas = false; gasTouch.id = null; gasEl.classList.remove('on','hot'); PL.yaw = Math.PI; PL.stagger = 0; PL.hitCD = 0; PL.tilt = 0; cam.yaw = Math.PI; cam.pitch = .42; cam.ctrl.set(0,0,-1); cam.grace = 0; }
+function resetPlayer(){ PL.pos.copy(START); PL.vel.set(0,0,0); PL.knock.set(0,0,0); PL.speed = 0; input.gas = false; gasTouch.id = null; gasEl.classList.remove('on','hot'); PL.yaw = Math.PI; PL.stagger = 0; PL.hitCD = 0; PL.tilt = 0; cam.yaw = Math.PI; cam.pitch = .36; cam.ctrl.set(0,0,-1); cam.grace = 0; }
 function startLevel(n){
   G.level = n; LC = levelCfg(n); spawnCrowd(LC); resetPlayer();
   G.beer = 100; G.time = 0; G.charges = 3; G.state = 'intro'; G.stateT = 0; lastPct = -1;
