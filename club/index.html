@@ -774,18 +774,23 @@ async function loadModelData(url){ // the .glb itself, or (where .glb can't be s
   const m = await import('./' + url + '.js'); const bin = atob(m.default), u8 = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8.buffer;
 }
-loadModelData(HERO_URL).then(buf => new GLTFLoader().parse(buf, '', g => {
-  const root = g.scene, bones = {};
-  root.traverse(o => {
-    if (o.isMesh){ o.frustumCulled = false; if (o.material){ o.material.envMap = ENV; o.material.envMapIntensity = .2; o.material.color.multiplyScalar(.78); } }
-    if (o.isBone) bones[o.name] = o;
-  });
-  const clip = g.animations[0];
-  for (const tr of clip.tracks) if (tr.name.endsWith('Hips.position')) for (let i = 0; i < tr.values.length; i += 3){ tr.values[i] = 0; tr.values[i+2] = 0; } // walk on the spot; the game moves him
-  const mixer = new THREE.AnimationMixer(root), act = mixer.clipAction(clip); act.play();
-  scene.add(root); player.root.visible = false; scene.attach(glass); glass.scale.setScalar(1.35); playerLight.intensity = 1.2;
-  Object.assign(heroM, { ready: true, root, mixer, act, bones });
-}, e => console.warn('hero model did not load, using the simple one', e))).catch(e => console.warn('hero model did not load, using the simple one', e));
+function loadRigged(url, tint, onReady){ // rigged GLB → { root, mixer, act, bones }. The capsule figure stays if it fails.
+  loadModelData(url).then(buf => new GLTFLoader().parse(buf, '', g => {
+    const root = g.scene, bones = {};
+    root.traverse(o => {
+      if (o.isMesh){ o.frustumCulled = false; if (o.material){ o.material.envMap = ENV; o.material.envMapIntensity = .2; o.material.color.multiplyScalar(tint); } }
+      if (o.isBone) bones[o.name] = o;
+    });
+    const clip = g.animations[0];
+    for (const tr of clip.tracks) if (tr.name.endsWith('Hips.position')) for (let i = 0; i < tr.values.length; i += 3){ tr.values[i] = 0; tr.values[i+2] = 0; } // animate on the spot; the game moves them
+    const mixer = new THREE.AnimationMixer(root), act = mixer.clipAction(clip); act.play();
+    scene.add(root); onReady({ ready: true, root, mixer, act, bones, clip });
+  }, e => console.warn(url + ' did not load', e))).catch(e => console.warn(url + ' did not load', e));
+}
+loadRigged(HERO_URL, .78, m => { Object.assign(heroM, m); player.root.visible = false; scene.attach(glass); glass.scale.setScalar(1.35); playerLight.intensity = 1.2; });
+const HER_URL = 'assets/her.glb';
+const herM = { ready: false };
+loadRigged(HER_URL, .85, m => { Object.assign(herM, m); her.root.visible = false; m.root.position.copy(HER); });
 const _bq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _ya = new THREE.Vector3(), _aim = new THREE.Vector3(), _hp = new THREE.Vector3();
 function aimBone(bone, dir){ // turn a bone so it points along a world direction (bones point along their local +Y)
   bone.getWorldQuaternion(_bq); _ya.set(0, 1, 0).applyQuaternion(_bq);
@@ -1151,7 +1156,7 @@ function posePlayer(t, dt){
   pRing.position.set(PL.pos.x, .022, PL.pos.z); pRing.material.opacity = .45 + .3*Math.sin(t*4);
   playerLight.position.set(PL.pos.x - Math.sin(PL.yaw)*.6, 2.2, PL.pos.z - Math.cos(PL.yaw)*.6);
 }
-function poseHer(t, beat){
+function poseHer(t, beat, dt = 1/60){
   const p = resetPose(herPose), sb = Math.sin(Math.PI*beat), dist = PL.pos.distanceTo(HER);
   p.bob = -.03*Math.abs(sb); p.roll = .15*sb; p.twist = .12*Math.sin(Math.PI*beat*.5); p.legL = .08*sb; p.legR = -.08*sb;
   p.aLx = -.3; p.aLz = .25; p.aRx = -.25; p.aRz = -.3;
@@ -1159,6 +1164,7 @@ function poseHer(t, beat){
   if (G.state.startsWith('won')){ p.aLx = -1.1; p.aRx = -1.1; p.aLz = .1; p.aRz = -.1; p.nod = -.1; }
   applyPose(her, p);
   her.root.rotation.y = lerpAngle(her.root.rotation.y, clamp(Math.atan2(PL.pos.x - HER.x, PL.pos.z - HER.z), -.9, .9), damp(3, 1/60));
+  if (herM.ready){ herM.root.rotation.y = her.root.rotation.y; herM.act.timeScale = G.state.startsWith('won') ? 1.4 : 1; herM.mixer.update(dt); }
   heart.position.y = 2.45 + .08*Math.sin(t*2.4); heart.rotation.y = t*1.6; const hs = 1 + .12*Math.max(0, Math.cos(Math.PI*2*beat)); heart.scale.setScalar(hs);
   herRing.material.opacity = .4 + .25*Math.sin(t*3);
 }
@@ -1239,7 +1245,7 @@ function update(dt, beat){
   updateSwitches(dt);
   updateCrowd(dt, beat);
   updatePlayer(dt, clock);
-  posePlayer(clock, dt); poseHer(clock, beat); poseDJ(beat);
+  posePlayer(clock, dt); poseHer(clock, beat, dt); poseDJ(beat);
   updateClub(dt, clock, beat);
   updateParticles(drops, dt, 9.8); updateParticles(hearts, dt, -.6);
   updateCamera(dt, clock, beat);
@@ -1256,7 +1262,7 @@ requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); $('loading'
 
 // hook for automated testing
 let simBeat = 0;
-window.__club = { heroM, G, PL, cam, SW, dancers, input, startLevel, setMode, useBroadcast, renderer, get LC(){ return LC; },
+window.__club = { heroM, herM, G, PL, cam, SW, dancers, input, startLevel, setMode, useBroadcast, renderer, get LC(){ return LC; },
   sim(sec, fn){ for (let t = 0; t < sec; t += 1/60){ if (fn) fn(t); simBeat += CFG.BPM/60/60; update(1/60, simBeat); } } };
 </script>
 </body>
