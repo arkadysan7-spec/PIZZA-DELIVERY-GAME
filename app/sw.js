@@ -1,7 +1,7 @@
 // שומר עותק של האפליקציה בטלפון, כדי שתיפתח גם בלי קליטה.
 // דפים: קודם מהרשת (כדי לקבל עדכונים), ואם אין רשת – מהעותק השמור.
 // תמונות וגופנים: מהעותק השמור, ומתעדכנים ברקע.
-const CACHE = 'p4p-v1';
+const CACHE = 'p4p-v2';
 const CORE = ['./', 'index.html', 'ninja.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

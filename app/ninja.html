@@ -656,4 +656,5 @@ requestAnimationFrame(frame);
 
 <!-- כפתור חזרה לאפליקציית המלאי (נוסף כדי שלא ניתקע במסך מלא של האפליקציה) -->
 <a href="index.html#list" id="p4p-back" aria-label="חזרה לרשימת המלאי" style="position:fixed;z-index:9999;left:max(10px,env(safe-area-inset-left,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:4px;padding:8px 14px;border-radius:999px;background:rgba(16,20,58,.88);color:#f4e04d;font:600 14px/1 'Rubik',system-ui,sans-serif;text-decoration:none;direction:rtl;box-shadow:0 4px 14px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent">→ לרשימה</a>
+<script>try{if(localStorage.getItem('p4p-lang')==='ar'){var b=document.getElementById('p4p-back');b.textContent='→ للقائمة';b.setAttribute('aria-label','رجوع للقائمة');}}catch(e){}</script>
 </body></html>

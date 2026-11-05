@@ -14,7 +14,7 @@
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700&family=Secular+One&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lalezar&family=Rubik:wght@400;500;700&family=Secular+One&display=swap">
 <script>
 /* ============================================================
    הגדרות – לעדכן כאן
@@ -24,16 +24,30 @@
 // כשהוא ריק – וואטסאפ ייפתח ואודי יבחר את דור מאנשי הקשר.
 const DOR_WHATSAPP = '';
 
+// באיזו שפה תצא ההודעה לדור בוואטסאפ: 'he' = תמיד עברית, 'ar' = תמיד ערבית,
+// 'auto' = בשפה שאודי בחר באפליקציה.
+const MESSAGE_LANG = 'he';
+
 // ⚠️ רשימה זמנית לדוגמה! להחליף ברשימת המוצרים האמיתית של הפיצרייה.
-// כל קטגוריה: שם + רשימת מוצרים. אפשר להוסיף, למחוק ולשנות סדר בחופשיות.
+// כל קטגוריה: שם בעברית, שם בערבית (ar), ורשימת מוצרים.
+// כל מוצר: ['שם בעברית', 'الاسم بالعربي']. אם אין תרגום – אפשר לכתוב רק 'שם בעברית', והוא יוצג גם במצב ערבית.
+// אפשר להוסיף, למחוק ולשנות סדר בחופשיות.
 const PRODUCTS = [
-  { cat: 'בצק וקמח',   items: ['קמח 00', 'סולת', 'שמרים', 'מלח', 'סוכר', 'שמן זית'] },
-  { cat: 'רטבים',      items: ['עגבניות מרוסקות', 'רסק עגבניות', 'פסטו', 'רוטב שום', 'רוטב חריף'] },
-  { cat: 'גבינות',     items: ['מוצרלה', 'פרמזן', 'גבינה כחולה', 'ריקוטה', 'פטה'] },
-  { cat: 'תוספות',     items: ['פטריות', 'זיתים שחורים', 'זיתים ירוקים', 'בצל סגול', 'פלפל חריף', 'תירס', 'עגבניות שרי', 'בזיליקום טרי', 'אורגנו', 'אנשובי'] },
-  { cat: 'אריזה',      items: ['קרטוני פיצה L', 'קרטוני פיצה M', 'קרטוני משולש', 'מפיות', 'שקיות משלוח', 'כפפות'] },
-  { cat: 'שתייה',      items: ['קולה', 'קולה זירו', 'ספרייט', 'מים', 'בירה'] },
-  { cat: 'ניקיון',     items: ['סבון כלים', 'נייר מגבת', 'שקיות זבל', 'חומר ניקוי', 'ספוגים'] },
+  { cat: 'בצק וקמח', ar: 'عجين وطحين', items: [
+    ['קמח 00', 'طحين 00'], ['סולת', 'سميد'], ['שמרים', 'خميرة'], ['מלח', 'ملح'], ['סוכר', 'سكر'], ['שמן זית', 'زيت زيتون'] ] },
+  { cat: 'רטבים', ar: 'صلصات', items: [
+    ['עגבניות מרוסקות', 'بندورة مطحونة'], ['רסק עגבניות', 'معجون بندورة'], ['פסטו', 'بيستو'], ['רוטב שום', 'صلصة ثوم'], ['רוטב חריף', 'صلصة حارّة'] ] },
+  { cat: 'גבינות', ar: 'أجبان', items: [
+    ['מוצרלה', 'موتزاريلا'], ['פרמזן', 'بارميزان'], ['גבינה כחולה', 'جبنة زرقاء'], ['ריקוטה', 'ريكوتا'], ['פטה', 'فيتا'] ] },
+  { cat: 'תוספות', ar: 'إضافات', items: [
+    ['פטריות', 'فطر'], ['זיתים שחורים', 'زيتون أسود'], ['זיתים ירוקים', 'زيتون أخضر'], ['בצל סגול', 'بصل أحمر'], ['פלפל חריף', 'فلفل حار'],
+    ['תירס', 'ذرة'], ['עגבניות שרי', 'بندورة شيري'], ['בזיליקום טרי', 'ريحان طازة'], ['אורגנו', 'أوريغانو'], ['אנשובי', 'أنشوفة'] ] },
+  { cat: 'אריזה', ar: 'تغليف', items: [
+    ['קרטוני פיצה L', 'كراتين بيتسا L'], ['קרטוני פיצה M', 'كراتين بيتسا M'], ['קרטוני משולש', 'كراتين مثلث'], ['מפיות', 'محارم'], ['שקיות משלוח', 'أكياس توصيل'], ['כפפות', 'كفوف'] ] },
+  { cat: 'שתייה', ar: 'مشروبات', items: [
+    ['קולה', 'كولا'], ['קולה זירו', 'كولا زيرو'], ['ספרייט', 'سبرايت'], ['מים', 'مي'], ['בירה', 'بيرة'] ] },
+  { cat: 'ניקיון', ar: 'تنظيف', items: [
+    ['סבון כלים', 'سائل جلي'], ['נייר מגבת', 'ورق مطبخ'], ['שקיות זבל', 'أكياس زبالة'], ['חומר ניקוי', 'مواد تنظيف'], ['ספוגים', 'إسفنج'] ] },
 ];
 
 // המשחק (דף נפרד בפרויקט)
@@ -54,7 +68,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     --ink:#f5f3ea;
     --muted:#a9addb;
     --red:#e2563f;
-    --f-head:'Secular One','Rubik',system-ui,sans-serif;
+    --f-head:'Secular One','Lalezar','Rubik',system-ui,sans-serif; /* Lalezar = כותרות בערבית */
     --f-body:'Rubik',system-ui,-apple-system,sans-serif;
     --sat:env(safe-area-inset-top,0px);
     --sab:env(safe-area-inset-bottom,0px);
@@ -87,17 +101,28 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   .btn-yellow:disabled{opacity:.45}
   @media (max-height:640px){.logo{width:min(34vw,130px)}#splash h1{font-size:36px}#splash p{font-size:15px}.btn-yellow{margin-top:14px}}
 
+  /* כפתור החלפת שפה */
+  .btn-lang{flex:none;min-width:44px;height:40px;padding:0 12px;border-radius:999px;display:grid;place-items:center;
+    background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.25);color:#fff;font:500 16px/1 var(--f-body)}
+  .btn-lang:active{transform:scale(.95)}
+  #splash .btn-lang{position:absolute;top:calc(var(--sat) + 14px);left:16px;z-index:2}
+
   /* ---------------- מסך המלאי ---------------- */
   #inv{min-height:100%;padding-bottom:calc(var(--sab) + 108px)}
   .top{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,var(--navy) 80%,rgba(16,20,58,0));
-    padding:calc(var(--sat) + 12px) 16px 14px;display:flex;align-items:center;gap:12px}
-  .top img{width:46px;height:46px;object-fit:contain;flex:none}
+    padding:calc(var(--sat) + 12px) 12px 14px;display:flex;align-items:center;gap:8px}
+  .top img{width:42px;height:42px;object-fit:contain;flex:none}
   .top .ttl{flex:1;min-width:0}
   .top h2{margin:0;font:400 26px/1.1 var(--f-head);color:#fff}
+  .top h2,.top small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .top small{display:block;margin-top:3px;font-size:13px;color:var(--muted)}
-  .btn-ninja{flex:none;display:flex;align-items:center;gap:6px;padding:10px 14px;border-radius:999px;
+  .btn-ninja{flex:none;display:flex;align-items:center;gap:5px;padding:10px 12px;white-space:nowrap;border-radius:999px;
     background:var(--navy-3);border:1.5px solid rgba(244,224,77,.55);color:var(--yellow);font:400 16px/1 var(--f-head);text-decoration:none}
   .btn-ninja:active{transform:scale(.96)}
+  .btn-ninja .l-short{display:none}
+  /* מסכים צרים: מוותרים על הלוגו הקטן, ובצרים מאוד מקצרים את כפתור המשחק – כדי שהכותרת לא תיחתך */
+  @media (max-width:420px){.top img{display:none}}
+  @media (max-width:360px){.btn-ninja .l-full{display:none}.btn-ninja .l-short{display:inline}}
 
   .cat{margin:10px 12px 0}
   .cat h3{display:flex;justify-content:space-between;align-items:baseline;margin:14px 6px 8px;font:400 19px/1.2 var(--f-head);color:var(--yellow)}
@@ -141,12 +166,13 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
 
 <!-- מסך פתיחה -->
 <section id="splash" aria-label="מסך פתיחה">
+  <button class="btn-lang" data-lang-btn type="button"></button>
   <img class="logo" id="logo" alt="Pizza For The People">
   <div class="tagline">PIZZA FOR THE PEOPLE · JAFFA</div>
   <div class="crew"><img id="crew" alt="אודי ויאיר"></div>
-  <h1>מה חסר היום?</h1>
-  <p>מסמנים, שולחים לדור, וחוזרים לתנור</p>
-  <button class="btn-yellow" id="start">מתחילים</button>
+  <h1 data-t="splashTitle">מה חסר היום?</h1>
+  <p data-t="splashSub">מסמנים, שולחים לדור, וחוזרים לתנור</p>
+  <button class="btn-yellow" id="start" data-t="start">מתחילים</button>
 </section>
 
 <!-- מסך המלאי -->
@@ -154,15 +180,16 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   <header class="top">
     <img id="logoSmall" alt="">
     <div class="ttl">
-      <h2>מה חסר?</h2>
+      <h2 data-t="invTitle">מה חסר?</h2>
       <small id="dateLine"></small>
     </div>
-    <a class="btn-ninja" id="ninja">🍕 פיצה נינג'ה</a>
+    <a class="btn-ninja" id="ninja">🍕 <span class="l-full" data-t="ninja">פיצה נינג'ה</span><span class="l-short" data-t="ninjaShort">נינג'ה</span></a>
+    <button class="btn-lang" data-lang-btn type="button"></button>
   </header>
   <div id="cats"></div>
-  <button class="clear-all" id="clearAll" hidden>ניקוי כל הסימונים</button>
+  <button class="clear-all" id="clearAll" hidden data-t="clearAll">ניקוי כל הסימונים</button>
   <div class="bar">
-    <button class="btn-yellow" id="send">שלח לדור <span class="count" id="count">0</span></button>
+    <button class="btn-yellow" id="send"><span data-t="send">שלח לדור</span> <span class="count" id="count">0</span></button>
   </div>
 </main>
 
@@ -170,8 +197,8 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   <div class="sheet">
     <h4 id="askT">נשלח לדור?</h4>
     <p id="askP">לנקות את הסימונים ולהתחיל רשימה חדשה?</p>
-    <button class="btn-yellow" id="askYes">כן, לנקות</button>
-    <button class="btn-ghost" id="askNo">לא, להשאיר</button>
+    <button class="btn-yellow" id="askYes" data-t="yes">כן, לנקות</button>
+    <button class="btn-ghost" id="askNo" data-t="no">לא, להשאיר</button>
   </div>
 </div>
 
@@ -187,6 +214,62 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   // אם תמונה לא נטענת (אין קליטה) – מסתירים אותה במקום להציג אייקון שבור
   document.querySelectorAll('img').forEach(i => i.addEventListener('error', () => { i.style.visibility = 'hidden'; }));
 
+  /* --- שפה: עברית / ערבית --- */
+  const T = {
+    he: {
+      langBtn: 'عربي', langBtnLabel: 'التبديل إلى العربية',
+      splashTitle: 'מה חסר היום?', splashSub: 'מסמנים, שולחים לדור, וחוזרים לתנור', start: 'מתחילים',
+      invTitle: 'מה חסר?', ninja: "פיצה נינג'ה", ninjaShort: "נינג'ה", send: 'שלח לדור', clearAll: 'ניקוי כל הסימונים',
+      missingN: n => `${n} חסרים`,
+      sentT: 'נשלח לדור?', sentP: 'לנקות את הסימונים ולהתחיל רשימה חדשה?',
+      clearT: 'לנקות הכל?', clearP: 'כל הסימונים יימחקו.',
+      yes: 'כן, לנקות', no: 'לא, להשאיר',
+      nothing: 'עוד לא סימנת שום דבר', cleared: 'נוקה! רשימה חדשה',
+      msgTitle: 'מה חסר – Pizza For The People', msgTotal: n => `סה״כ ${n} פריטים`,
+      locale: 'he-IL', title: 'מה חסר? · Pizza For The People',
+    },
+    ar: {
+      langBtn: 'עברית', langBtnLabel: 'מעבר לעברית',
+      splashTitle: 'شو ناقص اليوم؟', splashSub: 'بنعلّم، بنبعت لدور، وبنرجع عالفرن', start: 'يلّا نبلّش',
+      invTitle: 'شو ناقص؟', ninja: 'بيتسا نينجا', ninjaShort: 'نينجا', send: 'ابعث لدور', clearAll: 'امسح كل العلامات',
+      missingN: n => `ناقص ${n}`,
+      sentT: 'انبعتت لدور؟', sentP: 'نمسح العلامات ونبلّش قائمة جديدة؟',
+      clearT: 'نمسح كل إشي؟', clearP: 'كل العلامات رح تنمسح.',
+      yes: 'آه، امسح', no: 'لا، خلّيها',
+      nothing: 'لسّا ما علّمت ولا إشي', cleared: 'انمسحت! قائمة جديدة',
+      msgTitle: 'شو ناقص – Pizza For The People', msgTotal: n => `المجموع ${n}`,
+      locale: 'ar', title: 'شو ناقص؟ · Pizza For The People',
+    },
+  };
+  const LANG_KEY = 'p4p-lang';
+  let lang = 'he';
+  try { if (localStorage.getItem(LANG_KEY) === 'ar') lang = 'ar'; } catch {}
+  const t = k => T[lang][k];
+  // שם של מוצר/קטגוריה בשפה הנבחרת (אם אין תרגום – עברית)
+  const heName = it => Array.isArray(it) ? it[0] : it;
+  const nameIn = (it, l) => Array.isArray(it) ? (l === 'ar' && it[1]) || it[0] : it;
+  const catIn = (c, l) => (l === 'ar' && c.ar) || c.cat;
+  let askMode = 'sent';
+
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.title = t('title');
+    document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
+    document.querySelectorAll('[data-lang-btn]').forEach(b => { b.textContent = t('langBtn'); b.setAttribute('aria-label', t('langBtnLabel')); });
+    setAsk(askMode);
+    build();
+  }
+  function setAsk(mode) {
+    askMode = mode;
+    $('askT').textContent = t(mode === 'clear' ? 'clearT' : 'sentT');
+    $('askP').textContent = t(mode === 'clear' ? 'clearP' : 'sentP');
+  }
+  document.querySelectorAll('[data-lang-btn]').forEach(b => b.addEventListener('click', () => {
+    lang = lang === 'he' ? 'ar' : 'he';
+    try { localStorage.setItem(LANG_KEY, lang); } catch {}
+    applyLang();
+  }));
+
   /* --- שמירה בטלפון --- */
   const idOf = (cat, item) => cat + '|' + item;
   let marked;
@@ -194,9 +277,9 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...marked])); } catch {} };
 
   /* --- תאריך --- */
-  const dateStr = () => {
+  const dateStr = (l = lang) => {
     const d = new Date();
-    const day = d.toLocaleDateString('he-IL', { weekday: 'long' });
+    const day = d.toLocaleDateString(T[l].locale, { weekday: 'long' });
     const dd = String(d.getDate()).padStart(2, '0'), mm = String(d.getMonth() + 1).padStart(2, '0');
     return `${day}, ${dd}.${mm}.${d.getFullYear()}`;
   };
@@ -204,15 +287,15 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   /* --- בניית הרשימה --- */
   function build() {
     const wrap = $('cats'); wrap.innerHTML = '';
-    PRODUCTS.forEach(({ cat, items }) => {
+    PRODUCTS.forEach(c => {
       const sec = document.createElement('section'); sec.className = 'cat';
-      const h = document.createElement('h3'); h.innerHTML = `<b></b><span></span>`; h.firstChild.textContent = cat;
+      const h = document.createElement('h3'); h.innerHTML = `<b></b><span></span>`; h.firstChild.textContent = catIn(c, lang);
       const list = document.createElement('div'); list.className = 'list';
-      items.forEach(item => {
+      c.items.forEach(item => {
         const b = document.createElement('button'); b.className = 'item'; b.type = 'button';
-        b.dataset.id = idOf(cat, item);
+        b.dataset.id = idOf(c.cat, heName(item));
         b.innerHTML = `<span class="name"></span><span class="v" aria-hidden="true">${CHECK}</span>`;
-        b.firstChild.textContent = item;
+        b.firstChild.textContent = nameIn(item, lang);
         b.addEventListener('click', () => {
           const id = b.dataset.id;
           marked.has(id) ? marked.delete(id) : marked.add(id);
@@ -224,7 +307,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
       sec.append(h, list); wrap.appendChild(sec);
     });
     // מוחקים סימונים של מוצרים שכבר לא ברשימה
-    const valid = new Set(PRODUCTS.flatMap(c => c.items.map(i => idOf(c.cat, i))));
+    const valid = new Set(PRODUCTS.flatMap(c => c.items.map(i => idOf(c.cat, heName(i)))));
     [...marked].forEach(id => valid.has(id) || marked.delete(id));
     save(); refresh();
   }
@@ -236,8 +319,8 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     });
     document.querySelectorAll('.cat').forEach((sec, i) => {
       const { cat, items } = PRODUCTS[i];
-      const n = items.filter(it => marked.has(idOf(cat, it))).length;
-      sec.querySelector('h3 span').textContent = n ? `${n} חסרים` : '';
+      const n = items.filter(it => marked.has(idOf(cat, heName(it)))).length;
+      sec.querySelector('h3 span').textContent = n ? t('missingN')(n) : '';
     });
     $('count').textContent = marked.size;
     $('clearAll').hidden = marked.size === 0;
@@ -246,15 +329,16 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
 
   /* --- הודעה לוואטסאפ --- */
   function message() {
-    const lines = ['*מה חסר – Pizza For The People* 🍕', `📅 ${dateStr()}`, ''];
-    PRODUCTS.forEach(({ cat, items }) => {
-      const miss = items.filter(it => marked.has(idOf(cat, it)));
+    const ml = MESSAGE_LANG === 'auto' ? lang : (MESSAGE_LANG === 'ar' ? 'ar' : 'he');
+    const lines = [`*${T[ml].msgTitle}* 🍕`, `📅 ${dateStr(ml)}`, ''];
+    PRODUCTS.forEach(c => {
+      const miss = c.items.filter(it => marked.has(idOf(c.cat, heName(it))));
       if (!miss.length) return;
-      lines.push(`*${cat}*`);
-      miss.forEach(it => lines.push(`• ${it}`));
+      lines.push(`*${catIn(c, ml)}*`);
+      miss.forEach(it => lines.push(`• ${nameIn(it, ml)}`));
       lines.push('');
     });
-    lines.push(`סה״כ ${marked.size} פריטים`);
+    lines.push(T[ml].msgTotal(marked.size));
     return lines.join('\n');
   }
 
@@ -268,11 +352,11 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   let waitingReturn = false;
   function askClear() {
     waitingReturn = false; try { localStorage.removeItem(SENT); } catch {}
-    if (marked.size) { $('ask').hidden = false; $('askYes').focus(); }
+    if (marked.size) { setAsk('sent'); $('ask').hidden = false; $('askYes').focus(); }
   }
 
   $('send').addEventListener('click', () => {
-    if (!marked.size) { toast('עוד לא סימנת שום דבר'); return; }
+    if (!marked.size) { toast(t('nothing')); return; }
     const num = String(DOR_WHATSAPP || '').replace(/\D/g, '');
     const url = `https://wa.me/${num}?text=${encodeURIComponent(message())}`;
     waitingReturn = true;
@@ -284,14 +368,9 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && waitingReturn) setTimeout(askClear, 300);
   });
-  $('askYes').addEventListener('click', () => { marked.clear(); save(); refresh(); $('ask').hidden = true; toast('נוקה! רשימה חדשה'); window.scrollTo(0, 0); });
+  $('askYes').addEventListener('click', () => { marked.clear(); save(); refresh(); $('ask').hidden = true; toast(t('cleared')); window.scrollTo(0, 0); });
   $('askNo').addEventListener('click', () => { $('ask').hidden = true; });
-  $('clearAll').addEventListener('click', () => {
-    $('askT').textContent = 'לנקות הכל?'; $('askP').textContent = 'כל הסימונים יימחקו.';
-    $('ask').hidden = false;
-    const reset = () => { $('askT').textContent = 'נשלח לדור?'; $('askP').textContent = 'לנקות את הסימונים ולהתחיל רשימה חדשה?'; };
-    $('askYes').addEventListener('click', reset, { once: true }); $('askNo').addEventListener('click', reset, { once: true });
-  });
+  $('clearAll').addEventListener('click', () => { setAsk('clear'); $('ask').hidden = false; });
 
   /* --- מעבר בין מסכים --- */
   function showInv() {
@@ -303,7 +382,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   $('start').addEventListener('click', showInv);
   if (location.hash === '#list') { $('splash').hidden = true; $('inv').hidden = false; }
 
-  build();
+  applyLang();
 
   let sentAt = 0; try { sentAt = +localStorage.getItem(SENT) || 0; } catch {}
   if (sentAt && Date.now() - sentAt < 30 * 60 * 1000) {
