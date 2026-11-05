@@ -70,6 +70,16 @@
     background:radial-gradient(circle at 35% 35%,#fff7e8,#e9cfa4);box-shadow:0 4px 14px rgba(0,0,0,.5)}
   #joy.fast #knob{background:radial-gradient(circle at 35% 35%,#ffd3d8,var(--red))}
   #joy[hidden]{display:none}
+  #gas{position:fixed;left:max(22px,env(safe-area-inset-left,0px));bottom:max(22px,env(safe-area-inset-bottom,0px));width:86px;height:118px;
+    border-radius:18px 18px 26px 26px;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    background:repeating-linear-gradient(0deg,rgba(248,236,217,.1) 0 6px,transparent 6px 14px),var(--panel);border:2px solid rgba(248,236,217,.35);
+    transform:perspective(300px) rotateX(18deg);transition:transform .08s,background-color .1s,border-color .1s;opacity:.7}
+  #gas b{font:700 30px/1 var(--display);letter-spacing:.06em;color:var(--ink)}
+  #gas span{font:600 11px/1.2 var(--body);color:var(--dim);text-align:center;padding-inline:6px}
+  #gas .bar{width:56px;height:6px;border-radius:3px;background:rgba(248,236,217,.15);overflow:hidden;direction:ltr}
+  #gas .bar i{display:block;height:100%;width:calc(var(--v,0)*100%);background:linear-gradient(90deg,var(--teal) 0 68%,var(--red) 72%)}
+  #gas.on{opacity:1;transform:perspective(300px) rotateX(32deg) translateY(4px);border-color:var(--amber)}
+  #gas.hot{border-color:var(--red);box-shadow:0 0 24px rgba(255,59,78,.5)}
 
   /* banner */
   #banner{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;pointer-events:none;text-align:center;padding-inline:16px}
@@ -120,7 +130,7 @@
   #stars{font-size:40px;letter-spacing:6px;color:var(--amber);text-shadow:0 0 14px rgba(255,178,74,.7);direction:ltr;text-align:start}
   #stars .off{color:rgba(248,236,217,.18);text-shadow:none}
   #result p{margin:0;font:400 18px/1.45 var(--body)}
-  #mute{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:max(12px,env(safe-area-inset-bottom,0px));width:44px;height:44px;border-radius:50%;
+  #mute{position:fixed;right:max(12px,env(safe-area-inset-right,0px));top:calc(max(10px,env(safe-area-inset-top,0px)) + 70px);width:44px;height:44px;border-radius:50%;
     border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:18px;cursor:pointer;z-index:5}
   #mute.off{opacity:.5;text-decoration:line-through}
   #loading{position:fixed;inset:0;display:grid;place-items:center;font:700 34px var(--display);letter-spacing:.08em;color:var(--pink);background:var(--bg)}
@@ -162,6 +172,7 @@
 </div>
 <div id="slow" hidden>לאט! הבירה נשפכת</div>
 <div id="joy" hidden><div id="knob"></div></div>
+<div id="gas" hidden><b>גז</b><div class="bar"><i id="gasBar"></i></div><span>לוחצים כאן כדי ללכת</span></div>
 <div id="banner" hidden><b id="bannerTxt"></b><small id="bannerSub"></small></div>
 
 <div id="menu" class="ov" hidden>
@@ -170,13 +181,13 @@
     <h1 class="neon">הבירה שלה</h1>
     <p class="lead">הרחבה מפוצצת, ביד שלך כוס בירה מלאה, והיא מחכה בבר בצד השני של המועדון. צריך להגיע אליה עם כמה שיותר בירה בכוס.</p>
     <ul class="how">
-      <li><b>אגודל שמאל</b><span>הולכים. לאט לאט, כי מהר מדי הבירה נשפכת.</span></li>
-      <li><b>אצבע ימין</b><span>גוררים כדי לסובב את המצלמה או להרים אותה למעלה.</span></li>
+      <li><b>אצבע ימין</b><span>ג׳ויסטיק. מכוונים לאן הוא הולך.</span></li>
+      <li><b>אצבע שמאל</b><span>גז. לוחצים על המסך כדי ללכת. לחיצה ארוכה מאיצה, ומהר מדי הבירה נשפכת.</span></li>
       <li><b>מבט על</b><span>שלוש פעמים בשלב אפשר לראות את כל הרחבה מלמעלה.</span></li>
       <li><b>זהירות</b><span>מדי פעם המצלמה קופצת לזווית אחרת והכיוונים מתבלבלים.</span></li>
     </ul>
     <div class="row"><button id="startBtn" class="cta" type="button">לרחבה</button></div>
-    <p class="keys">במחשב: WASD או חיצים להליכה, Shift למהר, Q/E לסובב מצלמה, רווח למבט על.</p>
+    <p class="keys">במחשב: חיצים או WASD לכיוון, רווח לגז, B למבט על.</p>
   </div>
 </div>
 
@@ -218,7 +229,10 @@ const CFG = {
   BEAT_OFFSET: 0,     // שניות מתחילת הטראק עד הביט הראשון
   WALK: 2.1,          // מהירות מקסימלית במטרים לשנייה
   SLOSH: 1.5,         // מעל המהירות הזאת הבירה נשפכת לאט
-  ACCEL: 3.4,         // כמה מהר הוא מגיב לאגודל. נמוך = מחליק יותר
+  GAS_ACCEL: 1.1,     // כמה מהר הגז מאיץ (מ'/ש'²). כמה שנמוך יותר, יותר זמן עד שהבירה נשפכת
+  BRAKE: 3.6,         // כמה מהר הוא נעצר כשעוזבים את הגז
+  TURN: 6,            // כמה מהר הוא מסתובב לכיוון הג'ויסטיק
+  CAM_FOLLOW: 1.8,    // כמה מהר המצלמה חוזרת אל מאחוריו
   PLAYER_R: 0.27,
 };
 function levelCfg(n){
@@ -875,22 +889,27 @@ const AudioSys = (() => {
 /* ---------------- game state ---------------- */
 const G = { state:'menu', level: 1, beer: 100, time: 0, charges: 3, stateT: 0 };
 let LC = levelCfg(1);
-const PL = { pos: START.clone(), vel: new THREE.Vector3(), yaw: Math.PI, walk: 0, stagger: 0, hitCD: 0, tilt: 0, slosh: false, sloshT: 0 };
+const PL = { pos: START.clone(), vel: new THREE.Vector3(), knock: new THREE.Vector3(), speed: 0, yaw: Math.PI, walk: 0, stagger: 0, hitCD: 0, tilt: 0, slosh: false, sloshT: 0 };
 const _sec = new THREE.Vector3();
 const cam = { secPos: new THREE.Vector3(), mode:'menu', yaw: Math.PI, pitch: .42, shake: 0, ctrl: new THREE.Vector3(0,0,-1), grace: 0, look: new THREE.Vector3(0,1,0), cut: true, t: 0 };
 const SW = { timer: 0, warned: false, active: null, left: 0, dur: 1, last: null };
 const MODE_LABEL = { security:'מצלמת אבטחה', dj:'הזווית של הדיג׳יי', bar:'מאחורי הבר', drunk:'סחרחורת', broadcast:'מבט על' };
 
 /* ---------------- input ---------------- */
-const input = { jx: 0, jy: 0 };
-const joy = { id: null, ox: 0, oy: 0 }, look = { id: null, x: 0, y: 0 };
-const JOY_R = 56, joyEl = $('joy'), knob = $('knob'), touch = $('touch');
-function joyHome(){ joyEl.style.transform = `translate(96px, ${innerHeight - 100}px)`; knob.style.transform = ''; }
+// אצבע ימין = ג'ויסטיק (כיוון). אצבע שמאל = גז (לוחצים בכל מקום בצד שמאל של המסך).
+const input = { jx: 0, jy: 0, gas: false };
+const joy = { id: null, ox: 0, oy: 0 }, gasTouch = { id: null };
+const JOY_R = 56, joyEl = $('joy'), knob = $('knob'), touch = $('touch'), gasEl = $('gas'), gasBar = $('gasBar');
+function joyHome(){ joyEl.style.transform = `translate(${innerWidth - 100}px, ${innerHeight - 104}px)`; knob.style.transform = ''; }
 touch.addEventListener('pointerdown', e => {
   if (G.state !== 'play') return;
-  if (e.clientX < innerWidth*.5 && joy.id === null){
+  if (e.clientX >= innerWidth*.5){
+    if (joy.id !== null) return;
     joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joyEl.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`; joyEl.classList.add('on');
-  } else if (look.id === null){ look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY; }
+  } else {
+    if (gasTouch.id !== null) return;
+    gasTouch.id = e.pointerId; input.gas = true; gasEl.classList.add('on');
+  }
   try { touch.setPointerCapture(e.pointerId); } catch(err){}
 });
 touch.addEventListener('pointermove', e => {
@@ -898,18 +917,16 @@ touch.addEventListener('pointermove', e => {
     let dx = e.clientX - joy.ox, dy = e.clientY - joy.oy; const len = Math.hypot(dx, dy);
     if (len > JOY_R){ dx *= JOY_R/len; dy *= JOY_R/len; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`; input.jx = dx/JOY_R; input.jy = -dy/JOY_R;
-  } else if (e.pointerId === look.id){
-    if (cam.mode === 'follow' || cam.mode === 'drunk'){ cam.yaw -= (e.clientX - look.x)*.0062; cam.pitch = clamp(cam.pitch + (e.clientY - look.y)*.0035, .12, 1.05); }
-    look.x = e.clientX; look.y = e.clientY;
   }
 });
 function release(e){
-  if (e.pointerId === joy.id){ joy.id = null; input.jx = input.jy = 0; joyEl.classList.remove('on', 'fast'); joyHome(); }
-  if (e.pointerId === look.id) look.id = null;
+  if (e.pointerId === joy.id){ joy.id = null; input.jx = input.jy = 0; joyEl.classList.remove('on'); joyHome(); }
+  if (e.pointerId === gasTouch.id){ gasTouch.id = null; input.gas = false; gasEl.classList.remove('on'); }
 }
+addEventListener('resize', () => { if (joy.id === null) joyHome(); });
 touch.addEventListener('pointerup', release); touch.addEventListener('pointercancel', release);
 const keys = new Set();
-addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Space'){ e.preventDefault(); useBroadcast(); } });
+addEventListener('keydown', e => { keys.add(e.code); if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyB' || e.code === 'Enter') useBroadcast(); });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 
@@ -975,7 +992,7 @@ function updateCamera(dt, t, beat){
     case 'intro': {
       const s = smooth(.8, 2.6, G.stateT); const fp = new THREE.Vector3(), ft = new THREE.Vector3(); fwd = followPose(fp, ft);
       _cp.set(0, 7.2, 19.2).lerp(fp, s); _ct.set(0, 0, -7).lerp(ft, s); cam.cut = true; break; }
-    case 'follow': case 'drunk': fwd = followPose(_cp, _ct); k = 9; break;
+    case 'follow': case 'drunk': if (G.state === 'play') cam.yaw = lerpAngle(cam.yaw, PL.yaw, damp(CFG.CAM_FOLLOW*Math.min(1, PL.speed/.8), dt)); fwd = followPose(_cp, _ct); k = 9; break;
     case 'broadcast': _cp.set(HX-1.4, 7.35, clamp(p.z + .6, -14.5, 15.5)); _ct.set(p.x*.35 - 1.5, 0, clamp(p.z, -14.5, 15.5) - .4); fov = 64; k = 4; break;
     case 'security': _cp.copy(cam.secPos); _ct.set(p.x, .8, p.z); fov = 84; k = 3; break;
     case 'dj': _cp.set(-9.75, 2.35 + .04*Math.sin(beat*Math.PI), .25); _ct.set(p.x, 1.2, p.z); fov = 62; k = 3; break;
@@ -999,7 +1016,7 @@ function updateCamera(dt, t, beat){
 /* ---------------- player ---------------- */
 const _w = new THREE.Vector3(), _r = new THREE.Vector3(), _pp = new THREE.Vector3(), _gw = new THREE.Vector3();
 function hit(amount, n, label){
-  PL.hitCD = .6; PL.stagger = .45; PL.vel.addScaledVector(n, 2.4); PL.tilt = .7; cam.shake = .5;
+  PL.hitCD = .6; PL.stagger = .45; PL.knock.addScaledVector(n, 2.4); PL.speed *= .3; PL.tilt = .7; cam.shake = .5;
   spill(amount); glass.getWorldPosition(_gw); emit(drops, _gw, 28, 1.6, 2.2, n, 1.3);
   AudioSys.splash(); retrigger($('fx-hit'), 'on'); retrigger(hud.beerBox, 'hit');
   hud.pop.textContent = `-${Math.round(amount)}%`; retrigger(hud.pop, 'on');
@@ -1012,11 +1029,11 @@ function spill(amount){
 }
 function contact(d, n){
   if (PL.hitCD > 0) return;
-  const sp = PL.vel.length(); let amt = 0;
+  const sp = PL.speed; let amt = 0;
   if (d.cur === ST.COUPLE) amt = 11 + sp*4;
   else if (d.cur === ST.BIG) amt = 13 + sp*4;
   else if (sp > .7) amt = (d.cur === ST.PUMP ? 7 : d.cur === ST.WANDER ? 8 : 5) + sp*3;
-  if (amt > 0) hit(amt, n); else { PL.vel.multiplyScalar(.55); if (sp > .25){ PL.hitCD = .35; AudioSys.bump(); } }
+  if (amt > 0) hit(amt, n); else { PL.speed *= .55; if (sp > .25){ PL.hitCD = .35; AudioSys.bump(); } }
 }
 function collide(){
   const p = PL.pos, R = CFG.PLAYER_R;
@@ -1031,31 +1048,37 @@ function collide(){
   }
 }
 function updatePlayer(dt, t){
-  let jx = input.jx, jy = input.jy;
+  let jx = input.jx, jy = input.jy, gas = input.gas;
   if (joy.id === null){
     const kx = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
     const ky = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
-    if (kx || ky){ const s = (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1 : .66)/Math.hypot(kx, ky); jx = kx*s; jy = ky*s; }
-    if (cam.mode === 'follow' || cam.mode === 'drunk'){ if (keys.has('KeyQ')) cam.yaw += 1.9*dt; if (keys.has('KeyE')) cam.yaw -= 1.9*dt;
-      if (keys.has('KeyR')) cam.pitch = Math.min(1.05, cam.pitch + dt); if (keys.has('KeyF')) cam.pitch = Math.max(.12, cam.pitch - dt); }
+    if (kx || ky){ jx = kx; jy = ky; }
   }
-  let mag = Math.hypot(jx, jy); if (mag < .12){ jx = jy = 0; mag = 0; } else if (mag > 1){ jx /= mag; jy /= mag; mag = 1; }
-  joyEl.classList.toggle('fast', mag*CFG.WALK > CFG.SLOSH + .05);
-  if (G.state !== 'play'){ jx = jy = 0; }
-  const f = cam.ctrl, r = _r.set(-f.z, 0, f.x);
-  _w.set(0, 0, 0).addScaledVector(f, jy).addScaledVector(r, jx).multiplyScalar(CFG.WALK);
-  PL.vel.lerp(_w, damp(CFG.ACCEL*(PL.stagger > 0 ? .25 : 1), dt));
-  const sp = PL.vel.length(), dr = LC.drunk*(cam.mode === 'drunk' ? 2 : 1);
+  if (keys.has('Space')) gas = true;
+  const play = G.state === 'play';
+  if (!play){ jx = jy = 0; gas = false; }
+  // ג'ויסטיק: לאן להסתכל וללכת, יחסית למצלמה
+  if (Math.hypot(jx, jy) > .2){
+    const f = cam.ctrl, r = _r.set(-f.z, 0, f.x);
+    _w.set(0, 0, 0).addScaledVector(f, jy).addScaledVector(r, jx);
+    PL.yaw = lerpAngle(PL.yaw, Math.atan2(_w.x, _w.z), damp(CFG.TURN*(PL.stagger > 0 ? .3 : 1), dt));
+  }
+  // גז: מאיץ לאט כל עוד לוחצים, בולם כשעוזבים
+  if (gas && PL.stagger <= 0) PL.speed = Math.min(CFG.WALK, PL.speed + CFG.GAS_ACCEL*dt);
+  else PL.speed = Math.max(0, PL.speed - CFG.BRAKE*dt);
+  PL.knock.multiplyScalar(Math.exp(-dt*5));
+  PL.vel.set(Math.sin(PL.yaw)*PL.speed, 0, Math.cos(PL.yaw)*PL.speed).add(PL.knock);
+  const sp = PL.speed, dr = LC.drunk*(cam.mode === 'drunk' ? 2 : 1);
   const wob = Math.sin(t*1.7)*.55 + Math.sin(t*2.9 + 1.3)*.3;
-  const perp = sp > .05 ? _pp.set(-PL.vel.z/sp, 0, PL.vel.x/sp) : _pp.set(Math.cos(t*.7), 0, Math.sin(t*.9));
-  if (G.state === 'play') PL.pos.addScaledVector(PL.vel, dt).addScaledVector(perp, wob*dr*(.16 + .34*Math.min(1, sp/CFG.WALK))*dt);
+  const perp = _pp.set(-Math.cos(PL.yaw), 0, Math.sin(PL.yaw));
+  if (play) PL.pos.addScaledVector(PL.vel, dt).addScaledVector(perp, wob*dr*(.16 + .34*Math.min(1, sp/CFG.WALK))*dt);
   collide();
-  PL.slosh = sp > CFG.SLOSH && G.state === 'play';
+  PL.slosh = sp > CFG.SLOSH && play;
   if (PL.slosh){ const k = (sp - CFG.SLOSH)/(CFG.WALK - CFG.SLOSH); spill(dt*(3 + 7*k)); PL.sloshT -= dt;
     if (PL.sloshT <= 0){ PL.sloshT = .22; glass.getWorldPosition(_gw); emit(drops, _gw, 3, .6, 1.2); AudioSys.slosh(); } }
-  if (sp > .15) PL.yaw = lerpAngle(PL.yaw, Math.atan2(PL.vel.x, PL.vel.z), damp(8, dt));
-  PL.walk += sp*dt*4.6; PL.stagger = Math.max(0, PL.stagger - dt); PL.hitCD -= dt; PL.tilt *= Math.exp(-dt*5);
-  if (G.state === 'play' && PL.pos.distanceTo(HER) < 1.2) win();
+  gasEl.classList.toggle('on', gas); gasEl.classList.toggle('hot', PL.slosh); gasBar.style.setProperty('--v', (sp/CFG.WALK).toFixed(3));
+  PL.walk += (sp + PL.knock.length())*dt*4.6; PL.stagger = Math.max(0, PL.stagger - dt); PL.hitCD -= dt; PL.tilt *= Math.exp(-dt*5);
+  if (play && PL.pos.distanceTo(HER) < 1.2) win();
 }
 function posePlayer(t){
   const p = resetPose(plPose), sp = PL.vel.length(), k = Math.min(1, sp/CFG.WALK), s = Math.sin(PL.walk), dr = LC.drunk;
@@ -1118,26 +1141,26 @@ function updateClub(dt, t, beat){
 }
 
 /* ---------------- flow ---------------- */
-function resetPlayer(){ PL.pos.copy(START); PL.vel.set(0,0,0); PL.yaw = Math.PI; PL.stagger = 0; PL.hitCD = 0; PL.tilt = 0; cam.yaw = Math.PI; cam.pitch = .42; cam.ctrl.set(0,0,-1); cam.grace = 0; }
+function resetPlayer(){ PL.pos.copy(START); PL.vel.set(0,0,0); PL.knock.set(0,0,0); PL.speed = 0; input.gas = false; gasTouch.id = null; gasEl.classList.remove('on','hot'); PL.yaw = Math.PI; PL.stagger = 0; PL.hitCD = 0; PL.tilt = 0; cam.yaw = Math.PI; cam.pitch = .42; cam.ctrl.set(0,0,-1); cam.grace = 0; }
 function startLevel(n){
   G.level = n; LC = levelCfg(n); spawnCrowd(LC); resetPlayer();
   G.beer = 100; G.time = 0; G.charges = 3; G.state = 'intro'; G.stateT = 0; lastPct = -1;
   SW.timer = LC.first; SW.warned = false; SW.active = null; SW.last = null;
-  $('menu').hidden = true; $('result').hidden = true; $('hud').hidden = false; joyEl.hidden = !isTouch; joyHome();
+  $('menu').hidden = true; $('result').hidden = true; $('hud').hidden = false; joyEl.hidden = gasEl.hidden = !isTouch; joyHome();
   hud.lvl.textContent = `שלב ${n}`;
   setMode('intro');
   showBanner(`שלב ${n}`, `${dancers.length} רוקדים בינך לבינה. לאט לאט.`);
 }
 function beginPlay(){ G.state = 'play'; G.stateT = 0; hideBanner(); setMode('follow'); }
 function win(){
-  G.state = 'won'; G.stateT = 0; setMode('win'); AudioSys.win(); PL.vel.set(0,0,0);
+  G.state = 'won'; G.stateT = 0; setMode('win'); AudioSys.win(); PL.speed = 0; PL.knock.set(0,0,0);
   PL.yaw = Math.atan2(HER.x - PL.pos.x, HER.z - PL.pos.z);
   const _o = new THREE.Vector3(); for (let k = 0; k < 3; k++){ _o.set(HER.x + (PL.pos.x-HER.x)/2, 1.8, HER.z + (PL.pos.z-HER.z)/2); emit(hearts, _o, 12, 1.2, 1.4); }
   store.set('club-best', String(Math.max(+store.get('club-best') || 0, G.level)));
 }
-function lose(){ G.state = 'lost'; G.stateT = 0; setMode('lost'); AudioSys.lose(); PL.vel.set(0,0,0); }
+function lose(){ G.state = 'lost'; G.stateT = 0; setMode('lost'); AudioSys.lose(); PL.speed = 0; PL.knock.set(0,0,0); }
 function showResult(){
-  $('hud').hidden = true; hud.slow.hidden = true; joyEl.hidden = true;
+  $('hud').hidden = true; hud.slow.hidden = true; joyEl.hidden = gasEl.hidden = true;
   const won = G.state === 'won', b = Math.round(G.beer);
   const stars = won ? (b >= 75 ? 3 : b >= 45 ? 2 : 1) : 0;
   $('resEyebrow').textContent = `שלב ${G.level} · ${G.time.toFixed(1)} שניות`;
@@ -1148,7 +1171,7 @@ function showResult(){
   $('resMain').onclick = () => startLevel(won ? G.level + 1 : G.level);
   $('result').hidden = false; setTimeout(() => $('resMain').focus(), 50);
 }
-function toMenu(){ G.state = 'menu'; setMode('menu'); $('result').hidden = true; $('hud').hidden = true; joyEl.hidden = true; hideBanner(); $('menu').hidden = false; resetPlayer(); }
+function toMenu(){ G.state = 'menu'; setMode('menu'); $('result').hidden = true; $('hud').hidden = true; joyEl.hidden = gasEl.hidden = true; hideBanner(); $('menu').hidden = false; resetPlayer(); }
 $('resAlt').addEventListener('click', toMenu);
 $('startBtn').addEventListener('click', () => { AudioSys.start(); startLevel(1); });
 const muteBtn = $('mute'); muteBtn.classList.toggle('off', AudioSys.muted);
