@@ -769,7 +769,12 @@ scene.add(player.root);
 // ---- the real 3D hero (assets/hero.glb). Until it loads, the simple capsule hero above stands in. ----
 const HERO_URL = 'assets/hero.glb';
 const heroM = { ready: false };
-new GLTFLoader().load(HERO_URL, g => {
+async function loadModelData(url){ // the .glb itself, or (where .glb can't be served) a .js wrapper holding it as base64
+  try { const r = await fetch(url); if (r.ok) return await r.arrayBuffer(); } catch(e){}
+  const m = await import('./' + url + '.js'); const bin = atob(m.default), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8.buffer;
+}
+loadModelData(HERO_URL).then(buf => new GLTFLoader().parse(buf, '', g => {
   const root = g.scene, bones = {};
   root.traverse(o => {
     if (o.isMesh){ o.frustumCulled = false; if (o.material){ o.material.envMap = ENV; o.material.envMapIntensity = .2; o.material.color.multiplyScalar(.78); } }
@@ -780,7 +785,7 @@ new GLTFLoader().load(HERO_URL, g => {
   const mixer = new THREE.AnimationMixer(root), act = mixer.clipAction(clip); act.play();
   scene.add(root); player.root.visible = false; scene.attach(glass); glass.scale.setScalar(1.35); playerLight.intensity = 1.2;
   Object.assign(heroM, { ready: true, root, mixer, act, bones });
-}, undefined, e => console.warn('hero model did not load, using the simple one', e));
+}, e => console.warn('hero model did not load, using the simple one', e))).catch(e => console.warn('hero model did not load, using the simple one', e));
 const _bq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _ya = new THREE.Vector3(), _aim = new THREE.Vector3(), _hp = new THREE.Vector3();
 function aimBone(bone, dir){ // turn a bone so it points along a world direction (bones point along their local +Y)
   bone.getWorldQuaternion(_bq); _ya.set(0, 1, 0).applyQuaternion(_bq);
