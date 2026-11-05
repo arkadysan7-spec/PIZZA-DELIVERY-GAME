@@ -32,6 +32,12 @@ const MESSAGE_LANG = 'he';
 // כל קטגוריה: שם בעברית, שם בערבית (ar), ורשימת מוצרים.
 // כל מוצר: ['שם בעברית', 'الاسم بالعربي']. אם אין תרגום – אפשר לכתוב רק 'שם בעברית', והוא יוצג גם במצב ערבית.
 // אפשר להוסיף, למחוק ולשנות סדר בחופשיות.
+//
+// 📝 אודי יכול לערוך את הרשימה בעצמו מתוך האפליקציה (כפתור "עריכת הרשימה").
+// הרשימה שלו נשמרת בטלפון שלו, ומרגע שערך – האפליקציה אצלו משתמשת בה ולא ברשימה שכאן.
+// כדי לדחוף לאודי רשימה חדשה מכאן: לעדכן את PRODUCTS ולהעלות את PRODUCTS_VERSION ב-1.
+// ⚠️ זה מחליף את הרשימה שבטלפון שלו (שינויים שהוא עשה בעצמו יימחקו).
+const PRODUCTS_VERSION = 1;
 const PRODUCTS = [
   { cat: 'בצק וקמח', ar: 'عجين وطحين', items: [
     ['קמח 00', 'طحين 00'], ['סולת', 'سميد'], ['שמרים', 'خميرة'], ['מלח', 'ملح'], ['סוכר', 'سكر'], ['שמן זית', 'زيت زيتون'] ] },
@@ -126,7 +132,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
 
   .cat{margin:10px 12px 0}
   .cat h3{display:flex;justify-content:space-between;align-items:baseline;margin:14px 6px 8px;font:400 19px/1.2 var(--f-head);color:var(--yellow)}
-  .cat h3 span{font:500 13px/1 var(--f-body);color:var(--muted)}
+  .cat h3 > span{font:500 13px/1 var(--f-body);color:var(--muted)}
   .list{background:var(--navy-2);border-radius:18px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
   .item{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:8px 16px 8px 10px;text-align:right;
     border-top:1px solid rgba(255,255,255,.06);transition:background .15s}
@@ -147,6 +153,46 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     background:linear-gradient(0deg,var(--navy) 70%,rgba(16,20,58,0))}
   .bar .btn-yellow{margin:0 auto;display:flex;justify-content:center;align-items:center;gap:10px}
   .bar .count{display:inline-grid;place-items:center;min-width:34px;height:34px;padding:0 8px;border-radius:999px;background:var(--navy);color:var(--yellow);font:700 18px/1 var(--f-body)}
+
+  .tools{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px 18px;margin:26px 16px 0}
+  .tools .clear-all{margin:0}
+  .btn-edit{display:flex;align-items:center;gap:6px;padding:12px 20px;border-radius:999px;background:rgba(255,255,255,.07);
+    border:1.5px solid rgba(255,255,255,.18);color:var(--ink);font:500 16px/1 var(--f-body)}
+  .btn-edit:active{transform:scale(.97)}
+
+  /* ---------------- מסך עריכת הרשימה ---------------- */
+  #edit{min-height:100%;padding-bottom:calc(var(--sab) + 40px)}
+  .btn-done{flex:none;padding:11px 18px;border-radius:999px;background:var(--yellow);color:var(--navy);font:400 18px/1 var(--f-head);box-shadow:0 3px 0 var(--yellow-d)}
+  .btn-done:active{transform:translateY(2px);box-shadow:0 1px 0 var(--yellow-d)}
+  .ed-hint{margin:0 18px 4px;color:var(--muted);font-size:14px;line-height:1.4}
+  .cat h3 .ed-cat{display:flex;align-items:center;gap:6px;padding:6px 10px;margin:-6px -10px;border-radius:12px;color:var(--yellow);font:inherit}
+  .cat h3 .ed-cat:active{background:rgba(255,255,255,.06)}
+  .pen{width:18px;height:18px;flex:none;opacity:.75}
+  .erow{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 16px;text-align:right;border-top:1px solid rgba(255,255,255,.06)}
+  .erow:first-child{border-top:0}
+  .erow:active{background:rgba(255,255,255,.05)}
+  .erow .names{flex:1;min-width:0}
+  .erow .n1{display:block;font:500 17px/1.3 var(--f-body)}
+  .erow .n2{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
+  .erow .n2.missing{color:#e9a33d}
+  .erow .pen{opacity:.5}
+  .erow.add{color:var(--yellow);font:500 17px/1 var(--f-body);justify-content:flex-start}
+  .erow.add .plus{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;border:2px dashed rgba(244,224,77,.6);font-size:20px;line-height:1}
+  .btn-addcat{display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 24px);margin:22px 12px 0;padding:16px;border-radius:18px;
+    border:2px dashed rgba(244,224,77,.5);color:var(--yellow);font:400 19px/1 var(--f-head)}
+  .reset{display:block;margin:28px auto 0;padding:10px 18px;color:var(--muted);font-size:14px;text-decoration:underline;text-underline-offset:3px}
+
+  /* חלון עריכה של מוצר / קטגוריה */
+  .sheet.form{text-align:right}
+  .sheet.form h4{text-align:center}
+  .field{display:block;margin-top:16px}
+  .field span{display:block;margin:0 4px 6px;font-size:14px;color:var(--muted)}
+  .field input{width:100%;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.18);background:var(--navy);color:#fff;
+    font:500 18px/1.2 var(--f-body);outline:none}
+  .field input:focus{border-color:var(--yellow)}
+  .err{margin:10px 4px 0;color:#ff8a78;font-size:14px}
+  .btn-del{display:block;width:100%;margin-top:10px;padding:14px;border-radius:999px;font:500 17px/1.2 var(--f-body);color:#ff8a78;background:rgba(226,86,63,.12)}
+  .btn-del.sure{background:var(--red);color:#fff}
 
   /* ---------------- חלון שאלה + הודעה קצרה ---------------- */
   .modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:rgba(6,8,26,.7);
@@ -187,11 +233,43 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     <button class="btn-lang" data-lang-btn type="button"></button>
   </header>
   <div id="cats"></div>
-  <button class="clear-all" id="clearAll" hidden data-t="clearAll">ניקוי כל הסימונים</button>
+  <div class="tools">
+    <button class="btn-edit" id="openEdit" type="button">✏️ <span data-t="editList">עריכת הרשימה</span></button>
+    <button class="clear-all" id="clearAll" hidden data-t="clearAll">ניקוי כל הסימונים</button>
+  </div>
   <div class="bar">
     <button class="btn-yellow" id="send"><span data-t="send">שלח לדור</span> <span class="count" id="count">0</span></button>
   </div>
 </main>
+
+<!-- מסך עריכת הרשימה -->
+<main id="edit" hidden>
+  <header class="top">
+    <div class="ttl">
+      <h2 data-t="editTitle">עריכת הרשימה</h2>
+      <small data-t="editSaved">השינויים נשמרים בטלפון</small>
+    </div>
+    <button class="btn-lang" data-lang-btn type="button"></button>
+    <button class="btn-done" id="doneEdit" type="button" data-t="done">סיום</button>
+  </header>
+  <p class="ed-hint" data-t="editHint">לוחצים על מוצר או על שם קטגוריה כדי לשנות או למחוק.</p>
+  <div id="edCats"></div>
+  <button class="btn-addcat" id="addCat" type="button">+ <span data-t="addCat">קטגוריה חדשה</span></button>
+  <button class="reset" id="resetList" type="button" data-t="reset">חזרה לרשימה המקורית</button>
+</main>
+
+<!-- חלון עריכה של מוצר / קטגוריה -->
+<div class="modal" id="form" hidden role="dialog" aria-modal="true" aria-labelledby="formT">
+  <form class="sheet form" id="formEl" novalidate>
+    <h4 id="formT"></h4>
+    <label class="field"><span data-t="inHe">בעברית</span><input id="inHe" dir="rtl" lang="he" autocomplete="off" enterkeyhint="next"></label>
+    <label class="field"><span data-t="inAr">בערבית</span><input id="inAr" dir="rtl" lang="ar" autocomplete="off" enterkeyhint="done"></label>
+    <p class="err" id="formErr" hidden data-t="needName">צריך לכתוב שם לפחות בשפה אחת</p>
+    <button class="btn-yellow" type="submit" data-t="save">שמירה</button>
+    <button class="btn-del" id="formDel" type="button"></button>
+    <button class="btn-ghost" id="formCancel" type="button" data-t="cancel">ביטול</button>
+  </form>
+</div>
 
 <div class="modal" id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="askT">
   <div class="sheet">
@@ -205,8 +283,19 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const KEY = 'p4p-missing-v1';
   const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="#10143a" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 7"/></svg>';
+  const PEN = '<svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+
+  // מפתחות שמירה בטלפון
+  const KEY = 'p4p-missing-v1';        // מה סומן כחסר
+  const CAT_KEY = 'p4p-catalog-v1';    // רשימת המוצרים (אחרי עריכה של אודי)
+  const LANG_KEY = 'p4p-lang';         // שפה
+  const SENT = 'p4p-sent-at';          // מתי נשלחה הודעה לדור
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    del(k) { try { localStorage.removeItem(k); } catch {} },
+  };
 
   /* --- תמונות --- */
   $('logo').src = IMG_LOGO; $('logoSmall').src = IMG_LOGO; $('crew').src = IMG_CREW;
@@ -227,6 +316,17 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
       nothing: 'עוד לא סימנת שום דבר', cleared: 'נוקה! רשימה חדשה',
       msgTitle: 'מה חסר – Pizza For The People', msgTotal: n => `סה״כ ${n} פריטים`,
       locale: 'he-IL', title: 'מה חסר? · Pizza For The People',
+      // עריכה
+      editList: 'עריכת הרשימה', editTitle: 'עריכת הרשימה', editSaved: 'השינויים נשמרים בטלפון', done: 'סיום',
+      editHint: 'לוחצים על מוצר או על שם קטגוריה כדי לשנות או למחוק.',
+      addItem: 'הוספת מוצר', addCat: 'קטגוריה חדשה', reset: 'חזרה לרשימה המקורית',
+      newItem: 'מוצר חדש', editItem: 'עריכת מוצר', newCat: 'קטגוריה חדשה', editCat: 'עריכת קטגוריה',
+      inHe: 'בעברית', inAr: 'בערבית', save: 'שמירה', cancel: 'ביטול',
+      delItem: 'מחיקת המוצר', delCat: 'מחיקת הקטגוריה וכל המוצרים בה', sure: 'בטוח? לחיצה נוספת מוחקת',
+      needName: 'צריך לכתוב שם לפחות בשפה אחת', noTr: 'אין תרגום', emptyCat: 'אין מוצרים',
+      saved: 'נשמר ✓', deleted: 'נמחק',
+      resetT: 'לחזור לרשימה המקורית?', resetP: 'כל השינויים שעשית ברשימה יימחקו.', resetYes: 'כן, לחזור', resetNo: 'לא',
+      resetDone: 'הרשימה חזרה למקור',
     },
     ar: {
       langBtn: 'עברית', langBtnLabel: 'מעבר לעברית',
@@ -239,42 +339,52 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
       nothing: 'لسّا ما علّمت ولا إشي', cleared: 'انمسحت! قائمة جديدة',
       msgTitle: 'شو ناقص – Pizza For The People', msgTotal: n => `المجموع ${n}`,
       locale: 'ar', title: 'شو ناقص؟ · Pizza For The People',
+      // تعديل
+      editList: 'تعديل القائمة', editTitle: 'تعديل القائمة', editSaved: 'التغييرات بتنحفظ عالتلفون', done: 'خلص',
+      editHint: 'اضغط على منتج أو على اسم القسم عشان تغيّر أو تمسح.',
+      addItem: 'زيد منتج', addCat: 'قسم جديد', reset: 'رجّع القائمة الأصلية',
+      newItem: 'منتج جديد', editItem: 'تعديل منتج', newCat: 'قسم جديد', editCat: 'تعديل قسم',
+      inHe: 'بالعبري', inAr: 'بالعربي', save: 'احفظ', cancel: 'إلغاء',
+      delItem: 'امسح المنتج', delCat: 'امسح القسم وكل المنتجات اللي فيه', sure: 'متأكد؟ اضغط كمان مرة للمسح',
+      needName: 'لازم تكتب اسم بلغة وحدة على الأقل', noTr: 'ما في ترجمة', emptyCat: 'ما في منتجات',
+      saved: 'انحفظ ✓', deleted: 'انمسح',
+      resetT: 'نرجّع القائمة الأصلية؟', resetP: 'كل التغييرات اللي عملتها رح تنمسح.', resetYes: 'آه، رجّعها', resetNo: 'لا',
+      resetDone: 'رجعت القائمة الأصلية',
     },
   };
-  const LANG_KEY = 'p4p-lang';
-  let lang = 'he';
-  try { if (localStorage.getItem(LANG_KEY) === 'ar') lang = 'ar'; } catch {}
+  let lang = store.get(LANG_KEY) === 'ar' ? 'ar' : 'he';
   const t = k => T[lang][k];
-  // שם של מוצר/קטגוריה בשפה הנבחרת (אם אין תרגום – עברית)
-  const heName = it => Array.isArray(it) ? it[0] : it;
-  const nameIn = (it, l) => Array.isArray(it) ? (l === 'ar' && it[1]) || it[0] : it;
-  const catIn = (c, l) => (l === 'ar' && c.ar) || c.cat;
-  let askMode = 'sent';
+  const other = l => (l === 'ar' ? 'he' : 'ar');
+  // שם בשפה המבוקשת; אם אין – בשפה השנייה
+  const nm = (o, l = lang) => (o[l] || o[other(l)] || '').trim();
 
-  function applyLang() {
-    document.documentElement.lang = lang;
-    document.title = t('title');
-    document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
-    document.querySelectorAll('[data-lang-btn]').forEach(b => { b.textContent = t('langBtn'); b.setAttribute('aria-label', t('langBtnLabel')); });
-    setAsk(askMode);
-    build();
-  }
-  function setAsk(mode) {
-    askMode = mode;
-    $('askT').textContent = t(mode === 'clear' ? 'clearT' : 'sentT');
-    $('askP').textContent = t(mode === 'clear' ? 'clearP' : 'sentP');
-  }
-  document.querySelectorAll('[data-lang-btn]').forEach(b => b.addEventListener('click', () => {
-    lang = lang === 'he' ? 'ar' : 'he';
-    try { localStorage.setItem(LANG_KEY, lang); } catch {}
-    applyLang();
+  /* --- רשימת המוצרים: מהטלפון (אם אודי ערך) או מהקוד --- */
+  const fromCode = () => PRODUCTS.map(c => ({
+    id: 'c:' + c.cat, he: c.cat, ar: c.ar || '',
+    items: c.items.map(it => {
+      const he = Array.isArray(it) ? it[0] : it, ar = Array.isArray(it) ? it[1] || '' : '';
+      return { id: c.cat + '|' + he, he, ar };   // אותו מזהה כמו קודם – כדי שסימונים קיימים יישמרו
+    }),
   }));
+  let catalog;
+  try {
+    const saved = JSON.parse(store.get(CAT_KEY) || 'null');
+    catalog = saved && saved.v === PRODUCTS_VERSION && Array.isArray(saved.cats) ? saved.cats : null;
+  } catch { catalog = null; }
+  let isEdited = !!catalog;            // האם אודי שינה את הרשימה (אז מציגים "חזרה לרשימה המקורית")
+  if (!catalog) catalog = fromCode();
+  const saveCatalog = () => { isEdited = true; store.set(CAT_KEY, JSON.stringify({ v: PRODUCTS_VERSION, cats: catalog })); };
+  const newId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-  /* --- שמירה בטלפון --- */
-  const idOf = (cat, item) => cat + '|' + item;
+  /* --- סימונים --- */
   let marked;
-  try { marked = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch { marked = new Set(); }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...marked])); } catch {} };
+  try { marked = new Set(JSON.parse(store.get(KEY) || '[]')); } catch { marked = new Set(); }
+  const save = () => store.set(KEY, JSON.stringify([...marked]));
+  function pruneMarks() {
+    const valid = new Set(catalog.flatMap(c => c.items.map(i => i.id)));
+    [...marked].forEach(id => valid.has(id) || marked.delete(id));
+    save();
+  }
 
   /* --- תאריך --- */
   const dateStr = (l = lang) => {
@@ -284,21 +394,21 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     return `${day}, ${dd}.${mm}.${d.getFullYear()}`;
   };
 
-  /* --- בניית הרשימה --- */
+  /* ================= מסך המלאי ================= */
   function build() {
     const wrap = $('cats'); wrap.innerHTML = '';
-    PRODUCTS.forEach(c => {
-      const sec = document.createElement('section'); sec.className = 'cat';
-      const h = document.createElement('h3'); h.innerHTML = `<b></b><span></span>`; h.firstChild.textContent = catIn(c, lang);
+    catalog.forEach(c => {
+      if (!c.items.length) return;
+      const sec = document.createElement('section'); sec.className = 'cat'; sec.dataset.cat = c.id;
+      const h = document.createElement('h3'); h.innerHTML = '<b></b><span></span>'; h.firstChild.textContent = nm(c);
       const list = document.createElement('div'); list.className = 'list';
       c.items.forEach(item => {
         const b = document.createElement('button'); b.className = 'item'; b.type = 'button';
-        b.dataset.id = idOf(c.cat, heName(item));
+        b.dataset.id = item.id;
         b.innerHTML = `<span class="name"></span><span class="v" aria-hidden="true">${CHECK}</span>`;
-        b.firstChild.textContent = nameIn(item, lang);
+        b.firstChild.textContent = nm(item);
         b.addEventListener('click', () => {
-          const id = b.dataset.id;
-          marked.has(id) ? marked.delete(id) : marked.add(id);
+          marked.has(item.id) ? marked.delete(item.id) : marked.add(item.id);
           if (navigator.vibrate) navigator.vibrate(12);
           save(); refresh();
         });
@@ -306,10 +416,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
       });
       sec.append(h, list); wrap.appendChild(sec);
     });
-    // מוחקים סימונים של מוצרים שכבר לא ברשימה
-    const valid = new Set(PRODUCTS.flatMap(c => c.items.map(i => idOf(c.cat, heName(i)))));
-    [...marked].forEach(id => valid.has(id) || marked.delete(id));
-    save(); refresh();
+    pruneMarks(); refresh();
   }
 
   function refresh() {
@@ -317,9 +424,9 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
       const on = marked.has(b.dataset.id);
       b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
     });
-    document.querySelectorAll('.cat').forEach((sec, i) => {
-      const { cat, items } = PRODUCTS[i];
-      const n = items.filter(it => marked.has(idOf(cat, heName(it)))).length;
+    document.querySelectorAll('#cats .cat').forEach(sec => {
+      const c = catalog.find(x => x.id === sec.dataset.cat);
+      const n = c ? c.items.filter(it => marked.has(it.id)).length : 0;
       sec.querySelector('h3 span').textContent = n ? t('missingN')(n) : '';
     });
     $('count').textContent = marked.size;
@@ -331,28 +438,40 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   function message() {
     const ml = MESSAGE_LANG === 'auto' ? lang : (MESSAGE_LANG === 'ar' ? 'ar' : 'he');
     const lines = [`*${T[ml].msgTitle}* 🍕`, `📅 ${dateStr(ml)}`, ''];
-    PRODUCTS.forEach(c => {
-      const miss = c.items.filter(it => marked.has(idOf(c.cat, heName(it))));
+    catalog.forEach(c => {
+      const miss = c.items.filter(it => marked.has(it.id));
       if (!miss.length) return;
-      lines.push(`*${catIn(c, ml)}*`);
-      miss.forEach(it => lines.push(`• ${nameIn(it, ml)}`));
+      lines.push(`*${nm(c, ml)}*`);
+      miss.forEach(it => lines.push(`• ${nm(it, ml)}`));
       lines.push('');
     });
     lines.push(T[ml].msgTotal(marked.size));
     return lines.join('\n');
   }
 
-  function toast(t) {
-    const el = document.createElement('div'); el.className = 'toast'; el.textContent = t;
+  function toast(text) {
+    document.querySelectorAll('.toast').forEach(x => x.remove());
+    const el = document.createElement('div'); el.className = 'toast'; el.textContent = text;
     document.body.appendChild(el); setTimeout(() => el.remove(), 2200);
   }
 
+  /* --- חלון שאלה כללי --- */
+  let onYes = null;
+  function ask(title, text, yes, no, fn) {
+    $('askT').textContent = title; $('askP').textContent = text;
+    $('askYes').textContent = yes; $('askNo').textContent = no;
+    onYes = fn; $('ask').hidden = false; $('askYes').focus();
+  }
+  $('askYes').addEventListener('click', () => { $('ask').hidden = true; const f = onYes; onYes = null; f && f(); });
+  $('askNo').addEventListener('click', () => { $('ask').hidden = true; onYes = null; });
+
+  const clearMarks = () => { marked.clear(); save(); refresh(); toast(t('cleared')); window.scrollTo(0, 0); };
+
   // זוכרים שנשלחה הודעה – גם אם הדפדפן טוען את הדף מחדש בחזרה מוואטסאפ
-  const SENT = 'p4p-sent-at';
   let waitingReturn = false;
   function askClear() {
-    waitingReturn = false; try { localStorage.removeItem(SENT); } catch {}
-    if (marked.size) { setAsk('sent'); $('ask').hidden = false; $('askYes').focus(); }
+    waitingReturn = false; store.del(SENT);
+    if (marked.size) ask(t('sentT'), t('sentP'), t('yes'), t('no'), clearMarks);
   }
 
   $('send').addEventListener('click', () => {
@@ -360,7 +479,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     const num = String(DOR_WHATSAPP || '').replace(/\D/g, '');
     const url = `https://wa.me/${num}?text=${encodeURIComponent(message())}`;
     waitingReturn = true;
-    try { localStorage.setItem(SENT, Date.now()); } catch {}
+    store.set(SENT, Date.now());
     location.href = url;
     // אם הדף נשאר פתוח (למשל במחשב) – נשאל אחרי רגע
     setTimeout(() => { if (waitingReturn && document.visibilityState === 'visible') askClear(); }, 2500);
@@ -368,26 +487,132 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && waitingReturn) setTimeout(askClear, 300);
   });
-  $('askYes').addEventListener('click', () => { marked.clear(); save(); refresh(); $('ask').hidden = true; toast(t('cleared')); window.scrollTo(0, 0); });
-  $('askNo').addEventListener('click', () => { $('ask').hidden = true; });
-  $('clearAll').addEventListener('click', () => { setAsk('clear'); $('ask').hidden = false; });
+  $('clearAll').addEventListener('click', () => ask(t('clearT'), t('clearP'), t('yes'), t('no'), clearMarks));
 
-  /* --- מעבר בין מסכים --- */
-  function showInv() {
-    $('splash').classList.add('out');
-    $('inv').hidden = false;
-    setTimeout(() => { $('splash').hidden = true; }, 350);
-    history.replaceState(null, '', '#list');
+  /* ================= מסך עריכת הרשימה ================= */
+  function buildEdit() {
+    const wrap = $('edCats'); wrap.innerHTML = '';
+    catalog.forEach(c => {
+      const sec = document.createElement('section'); sec.className = 'cat';
+      const h = document.createElement('h3');
+      const hb = document.createElement('button'); hb.type = 'button'; hb.className = 'ed-cat';
+      hb.innerHTML = '<span></span>' + PEN; hb.firstChild.textContent = nm(c);
+      hb.addEventListener('click', () => openForm({ kind: 'cat', cat: c }));
+      h.appendChild(hb);
+      const list = document.createElement('div'); list.className = 'list';
+      c.items.forEach(item => {
+        const r = document.createElement('button'); r.type = 'button'; r.className = 'erow';
+        r.innerHTML = '<span class="names"><span class="n1"></span><span class="n2"></span></span>' + PEN;
+        r.querySelector('.n1').textContent = nm(item);
+        const sec2 = item[other(lang)];
+        const n2 = r.querySelector('.n2');
+        n2.textContent = sec2 ? sec2 : t('noTr'); n2.classList.toggle('missing', !sec2);
+        r.addEventListener('click', () => openForm({ kind: 'item', cat: c, item }));
+        list.appendChild(r);
+      });
+      const add = document.createElement('button'); add.type = 'button'; add.className = 'erow add';
+      add.innerHTML = '<span class="plus" aria-hidden="true">+</span><span></span>'; add.lastChild.textContent = t('addItem');
+      add.addEventListener('click', () => openForm({ kind: 'item', cat: c }));
+      list.appendChild(add);
+      sec.append(h, list); wrap.appendChild(sec);
+    });
+    $('resetList').hidden = !isEdited;
   }
-  $('start').addEventListener('click', showInv);
-  if (location.hash === '#list') { $('splash').hidden = true; $('inv').hidden = false; }
+
+  /* --- חלון עריכה --- */
+  let ctx = null, delArmed = false;
+  function openForm(c) {
+    ctx = c; delArmed = false;
+    const obj = c.kind === 'cat' ? c.cat : c.item;
+    const isNew = !obj;
+    $('formT').textContent = t(c.kind === 'cat' ? (isNew ? 'newCat' : 'editCat') : (isNew ? 'newItem' : 'editItem'));
+    $('inHe').value = obj ? obj.he : ''; $('inAr').value = obj ? obj.ar : '';
+    $('formErr').hidden = true;
+    const del = $('formDel'); del.hidden = isNew; del.classList.remove('sure');
+    del.textContent = t(c.kind === 'cat' ? 'delCat' : 'delItem');
+    // השדה של השפה שבחר – ראשון
+    const [first, second] = lang === 'ar' ? ['inAr', 'inHe'] : ['inHe', 'inAr'];
+    const form = $('formEl'); form.insertBefore($(first).parentNode, $(second).parentNode);
+    $(first).setAttribute('enterkeyhint', 'next'); $(second).setAttribute('enterkeyhint', 'done');
+    $('form').hidden = false;
+    setTimeout(() => $(first).focus(), 50);
+  }
+  const closeForm = () => { $('form').hidden = true; ctx = null; };
+
+  $('formEl').addEventListener('submit', e => {
+    e.preventDefault();
+    const he = $('inHe').value.trim(), ar = $('inAr').value.trim();
+    if (!he && !ar) { $('formErr').hidden = false; return; }
+    if (ctx.kind === 'cat') {
+      if (ctx.cat) Object.assign(ctx.cat, { he, ar });
+      else catalog.push({ id: newId('c'), he, ar, items: [] });
+    } else {
+      if (ctx.item) Object.assign(ctx.item, { he, ar });
+      else ctx.cat.items.push({ id: newId('i'), he, ar });
+    }
+    commit(); closeForm(); toast(t('saved'));
+  });
+  // Enter בשדה הראשון עובר לשני
+  ['inHe', 'inAr'].forEach(id => $(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter' && $(id).getAttribute('enterkeyhint') === 'next') {
+      e.preventDefault(); $(id === 'inHe' ? 'inAr' : 'inHe').focus();
+    }
+  }));
+  $('formDel').addEventListener('click', () => {
+    if (!delArmed) { delArmed = true; $('formDel').classList.add('sure'); $('formDel').textContent = t('sure'); return; }
+    if (ctx.kind === 'cat') catalog = catalog.filter(c => c !== ctx.cat);
+    else ctx.cat.items = ctx.cat.items.filter(i => i !== ctx.item);
+    commit(); closeForm(); toast(t('deleted'));
+  });
+  $('formCancel').addEventListener('click', closeForm);
+  $('form').addEventListener('click', e => { if (e.target === $('form')) closeForm(); });
+
+  function commit() { saveCatalog(); pruneMarks(); buildEdit(); build(); }
+
+  $('addCat').addEventListener('click', () => openForm({ kind: 'cat' }));
+  $('resetList').addEventListener('click', () => ask(t('resetT'), t('resetP'), t('resetYes'), t('resetNo'), () => {
+    store.del(CAT_KEY); isEdited = false; catalog = fromCode(); pruneMarks(); buildEdit(); build(); toast(t('resetDone'));
+  }));
+
+  /* ================= שפה ================= */
+  function applyLang() {
+    document.documentElement.lang = lang;
+    document.title = t('title');
+    document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
+    document.querySelectorAll('[data-lang-btn]').forEach(b => { b.textContent = t('langBtn'); b.setAttribute('aria-label', t('langBtnLabel')); });
+    build(); buildEdit();
+  }
+  document.querySelectorAll('[data-lang-btn]').forEach(b => b.addEventListener('click', () => {
+    lang = other(lang); store.set(LANG_KEY, lang); applyLang();
+  }));
+
+  /* ================= מעבר בין מסכים ================= */
+  // #list = רשימת המלאי, #edit = עריכת הרשימה, בלי כלום = מסך פתיחה
+  function show(screen) {
+    const sp = $('splash');
+    if (screen === 'splash') { sp.hidden = false; sp.classList.remove('out'); }
+    else if (!sp.hidden) { sp.classList.add('out'); setTimeout(() => { sp.hidden = true; }, 350); }
+    $('inv').hidden = screen !== 'list';
+    $('edit').hidden = screen !== 'edit';
+    if (screen !== 'splash') history.replaceState(null, '', '#' + screen);
+    window.scrollTo(0, 0);
+  }
+  $('start').addEventListener('click', () => show('list'));
+  $('openEdit').addEventListener('click', () => show('edit'));
+  $('doneEdit').addEventListener('click', () => show('list'));
+
+  addEventListener('hashchange', () => {
+    if (location.hash === '#edit') show('edit'); else if (location.hash === '#list') show('list');
+  });
 
   applyLang();
+  if (location.hash === '#edit') { $('splash').hidden = true; show('edit'); }
+  else if (location.hash === '#list') { $('splash').hidden = true; show('list'); }
 
-  let sentAt = 0; try { sentAt = +localStorage.getItem(SENT) || 0; } catch {}
+  const sentAt = +store.get(SENT) || 0;
   if (sentAt && Date.now() - sentAt < 30 * 60 * 1000) {
-    $('splash').hidden = true; $('inv').hidden = false; setTimeout(askClear, 300);
-  } else if (sentAt) { try { localStorage.removeItem(SENT); } catch {} }
+    $('splash').hidden = true; show('list'); setTimeout(askClear, 300);
+  } else if (sentAt) store.del(SENT);
 
   /* --- עבודה גם בלי אינטרנט --- */
   if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
