@@ -1,7 +1,7 @@
 // שומר עותק של האפליקציה בטלפון, כדי שתיפתח גם בלי קליטה.
 // דפים: קודם מהרשת (כדי לקבל עדכונים), ואם אין רשת – מהעותק השמור.
 // תמונות וגופנים: מהעותק השמור, ומתעדכנים ברקע.
-const CACHE = 'p4p-v3';
+const CACHE = 'p4p-v4';
 const CORE = ['./', 'index.html', 'ninja.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -14,6 +14,8 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // מוזיקה/וידאו – משאירים לדפדפן (בקשות חלקיות של אודיו נשברות דרך service worker באייפון)
+  if (req.destination === 'audio' || req.destination === 'video' || /\.(mp3|m4a|ogg|wav)(\?|$)/i.test(req.url)) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then(res => {
       const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res;

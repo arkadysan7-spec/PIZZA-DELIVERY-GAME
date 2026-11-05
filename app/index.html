@@ -56,12 +56,17 @@ const PRODUCTS = [
     ['סבון כלים', 'سائل جلي'], ['נייר מגבת', 'ورق مطبخ'], ['שקיות זבל', 'أكياس زبالة'], ['חומר ניקוי', 'مواد تنظيف'], ['ספוגים', 'إسفنج'] ] },
 ];
 
+// מוזיקת רקע (מתחילה בלחיצה הראשונה – דפדפנים לא מאפשרים לנגן לפני כן). אודי יכול לכבות בכפתור ♫.
+const MUSIC_URL = 'https://d2ol7oe51mr4n9.cloudfront.net/user_3KW2YTi9wKUIJMvG3be1a69csu3/697fc77d-6c4e-4af8-954d-cea9b3165ff5.mp3';
+const MUSIC_VOLUME = 0.35;   // 0–1 (באייפון הדפדפן מתעלם מזה, והעוצמה לפי כפתורי הטלפון)
+
 // המשחק (דף נפרד בפרויקט)
 const GAME_URL = 'ninja.html';
 
 // תמונות
 const IMG_LOGO  = 'https://d2ol7oe51mr4n9.cloudfront.net/user_3KW2YTi9wKUIJMvG3be1a69csu3/2015f48a-e528-4ee4-a543-3893032d7ffd.png';
-const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be1a69csu3/hf_20261105_143125_479264a5-8de2-48d2-a328-013d481c71bf.png';
+// אודי ויאיר – גרסת סטודיו (מעובדת, עם פייד למטה ורקע שקוף)
+const IMG_CREW  = 'https://d2ol7oe51mr4n9.cloudfront.net/user_3KW2YTi9wKUIJMvG3be1a69csu3/c5ffcb03-4f94-48e9-a300-95c3949af063.webp';
 </script>
 <style>
   :root{
@@ -98,32 +103,40 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   .crew::before{content:"";position:absolute;left:50%;top:52%;width:min(120vw,560px);aspect-ratio:1;transform:translate(-50%,-50%);
     background:radial-gradient(circle,rgba(52,64,140,.95) 0%,rgba(52,64,140,.55) 35%,rgba(52,64,140,0) 68%);pointer-events:none}
   .crew img{position:relative;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block}
-  #splash h1{margin:14px 0 0;font:400 clamp(40px,12vw,56px)/1.05 var(--f-head);color:#fff}
-  #splash p{margin:10px 0 0;font:400 17px/1.45 var(--f-body);color:var(--muted)}
-  .btn-yellow{display:block;width:100%;max-width:360px;margin:22px auto 0;padding:16px 20px 17px;border-radius:999px;
-    background:var(--yellow);color:var(--navy);font:400 26px/1 var(--f-head);
-    box-shadow:0 5px 0 var(--yellow-d),0 14px 30px rgba(244,224,77,.22);transition:transform .08s,box-shadow .08s}
-  .btn-yellow:active{transform:translateY(4px);box-shadow:0 1px 0 var(--yellow-d),0 6px 14px rgba(244,224,77,.2)}
+  #splash h1{margin:12px 0 0;font:400 clamp(30px,8.6vw,40px)/1.1 var(--f-head);color:#fff;letter-spacing:.005em}
+  #splash p{margin:8px 0 0;font:400 15px/1.5 var(--f-body);color:var(--muted)}
+  .btn-yellow{display:block;width:100%;max-width:340px;margin:20px auto 0;padding:14px 20px;border-radius:999px;
+    background:linear-gradient(180deg,#f8e866,var(--yellow));color:var(--navy);font:400 19px/1.1 var(--f-head);letter-spacing:.01em;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 8px 22px rgba(244,224,77,.18);transition:transform .12s,filter .12s}
+  .btn-yellow:active{transform:scale(.98);filter:brightness(.95)}
   .btn-yellow:disabled{opacity:.45}
-  @media (max-height:640px){.logo{width:min(34vw,130px)}#splash h1{font-size:36px}#splash p{font-size:15px}.btn-yellow{margin-top:14px}}
+  @media (max-height:640px){.logo{width:min(34vw,130px)}#splash h1{font-size:28px}#splash p{font-size:14px}.btn-yellow{margin-top:14px}}
 
   /* כפתור החלפת שפה */
-  .btn-lang{flex:none;min-width:44px;height:40px;padding:0 12px;border-radius:999px;display:grid;place-items:center;
-    background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.25);color:#fff;font:500 16px/1 var(--f-body)}
+  .btn-lang{flex:none;min-width:40px;height:34px;padding:0 11px;border-radius:999px;display:grid;place-items:center;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#fff;font:500 13.5px/1 var(--f-body)}
   .btn-lang:active{transform:scale(.95)}
   #splash .btn-lang{position:absolute;top:calc(var(--sat) + 14px);left:16px;z-index:2}
+  /* כפתור מוזיקה */
+  .btn-sound{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#fff}
+  .btn-sound svg{width:17px;height:17px}
+  .btn-sound .off{display:none}
+  .btn-sound.muted .on{display:none}.btn-sound.muted .off{display:block}
+  .btn-sound.muted{color:var(--muted)}
+  #splash .btn-sound{position:absolute;top:calc(var(--sat) + 14px);right:16px;z-index:2}
 
   /* ---------------- מסך המלאי ---------------- */
-  #inv{min-height:100%;padding-bottom:calc(var(--sab) + 108px)}
+  #inv{min-height:100%;padding-bottom:calc(var(--sab) + 100px)}
   .top{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,var(--navy) 80%,rgba(16,20,58,0));
     padding:calc(var(--sat) + 12px) 12px 14px;display:flex;align-items:center;gap:8px}
-  .top img{width:42px;height:42px;object-fit:contain;flex:none}
+  .top img{width:38px;height:38px;object-fit:contain;flex:none}
   .top .ttl{flex:1;min-width:0}
-  .top h2{margin:0;font:400 26px/1.1 var(--f-head);color:#fff}
+  .top h2{margin:0;font:400 21px/1.15 var(--f-head);color:#fff}
   .top h2,.top small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .top small{display:block;margin-top:3px;font-size:13px;color:var(--muted)}
-  .btn-ninja{flex:none;display:flex;align-items:center;gap:5px;padding:10px 12px;white-space:nowrap;border-radius:999px;
-    background:var(--navy-3);border:1.5px solid rgba(244,224,77,.55);color:var(--yellow);font:400 16px/1 var(--f-head);text-decoration:none}
+  .top small{display:block;margin-top:2px;font-size:12px;color:var(--muted)}
+  .btn-ninja{flex:none;display:flex;align-items:center;gap:5px;height:34px;padding:0 12px;white-space:nowrap;border-radius:999px;
+    background:rgba(244,224,77,.08);border:1px solid rgba(244,224,77,.45);color:var(--yellow);font:400 14px/1 var(--f-head);text-decoration:none}
   .btn-ninja:active{transform:scale(.96)}
   .btn-ninja .l-short{display:none}
   /* מסכים צרים: מוותרים על הלוגו הקטן, ובצרים מאוד מקצרים את כפתור המשחק – כדי שהכותרת לא תיחתך */
@@ -131,39 +144,51 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   @media (max-width:360px){.btn-ninja .l-full{display:none}.btn-ninja .l-short{display:inline}}
 
   .cat{margin:10px 12px 0}
-  .cat h3{display:flex;justify-content:space-between;align-items:baseline;margin:14px 6px 8px;font:400 19px/1.2 var(--f-head);color:var(--yellow)}
-  .cat h3 > span{font:500 13px/1 var(--f-body);color:var(--muted)}
-  .list{background:var(--navy-2);border-radius:18px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-  .item{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:8px 16px 8px 10px;text-align:right;
+  .cat h3{display:flex;justify-content:space-between;align-items:baseline;margin:18px 6px 8px;font:400 15.5px/1.2 var(--f-head);color:var(--yellow);letter-spacing:.01em}
+  .cat h3 > span{font:500 12px/1 var(--f-body);color:var(--muted)}
+  .list{background:var(--navy-2);border-radius:16px;overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  .item{display:flex;align-items:center;gap:12px;width:100%;min-height:58px;padding:7px 16px 7px 12px;text-align:right;
     border-top:1px solid rgba(255,255,255,.06);transition:background .15s}
   .item:first-child{border-top:0}
-  .item .name{flex:1;font:500 18px/1.3 var(--f-body)}
-  .item .v{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
-    border:2.5px solid rgba(255,255,255,.28);transition:background .15s,border-color .15s,transform .2s cubic-bezier(.3,1.6,.5,1)}
-  .item .v svg{width:30px;height:30px;opacity:0;transform:scale(.4);transition:opacity .15s,transform .2s cubic-bezier(.3,1.6,.5,1)}
-  .item.on{background:rgba(244,224,77,.1)}
+  .item .name{flex:1;font:400 16px/1.3 var(--f-body)}
+  .item .v{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;
+    border:2px solid rgba(255,255,255,.26);transition:background .15s,border-color .15s,transform .2s cubic-bezier(.3,1.6,.5,1)}
+  .item .v svg{width:22px;height:22px;opacity:0;transform:scale(.4);transition:opacity .15s,transform .2s cubic-bezier(.3,1.6,.5,1)}
+  .item.on{background:rgba(244,224,77,.07)}
+  .item.on .name{font-weight:500}
   .item.on .name{color:var(--yellow)}
   .item.on .v{background:var(--yellow);border-color:var(--yellow)}
   .item.on .v svg{opacity:1;transform:none}
   .item:active .v{transform:scale(.9)}
 
-  .clear-all{display:block;margin:26px auto 0;padding:10px 18px;color:var(--muted);font-size:15px;text-decoration:underline;text-underline-offset:3px}
+  .clear-all{display:block;margin:26px auto 0;padding:10px 18px;color:var(--muted);font-size:13.5px;text-decoration:underline;text-underline-offset:3px}
 
   .bar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:14px 16px calc(var(--sab) + 14px);
     background:linear-gradient(0deg,var(--navy) 70%,rgba(16,20,58,0))}
-  .bar .btn-yellow{margin:0 auto;display:flex;justify-content:center;align-items:center;gap:10px}
-  .bar .count{display:inline-grid;place-items:center;min-width:34px;height:34px;padding:0 8px;border-radius:999px;background:var(--navy);color:var(--yellow);font:700 18px/1 var(--f-body)}
+  /* כפתור "שלח לדור" */
+  .btn-send{display:flex;align-items:center;gap:12px;width:100%;max-width:440px;margin:0 auto;height:56px;padding:0 8px 0 18px;border-radius:18px;
+    background:linear-gradient(180deg,#f8e866,var(--yellow));color:var(--navy);text-align:right;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6),0 10px 28px rgba(0,0,0,.35);transition:transform .12s,filter .12s,opacity .2s}
+  .btn-send:active{transform:scale(.985);filter:brightness(.95)}
+  .btn-send .wa{flex:none;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--navy)}
+  .btn-send .wa svg{width:22px;height:22px}
+  .btn-send .lbl{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+  .btn-send .lbl b{font:400 17px/1.1 var(--f-head);letter-spacing:.01em}
+  .btn-send .lbl small{font:500 12px/1 var(--f-body);opacity:.62}
+  .btn-send .count{flex:none;min-width:30px;height:30px;padding:0 9px;border-radius:999px;display:grid;place-items:center;
+    background:rgba(16,20,58,.1);font:700 15px/1 var(--f-body);font-variant-numeric:tabular-nums}
+  .btn-send.empty{opacity:.55}
 
   .tools{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px 18px;margin:26px 16px 0}
   .tools .clear-all{margin:0}
-  .btn-edit{display:flex;align-items:center;gap:6px;padding:12px 20px;border-radius:999px;background:rgba(255,255,255,.07);
-    border:1.5px solid rgba(255,255,255,.18);color:var(--ink);font:500 16px/1 var(--f-body)}
+  .btn-edit{display:flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.16);color:var(--ink);font:500 14px/1 var(--f-body)}
   .btn-edit:active{transform:scale(.97)}
 
   /* ---------------- מסך עריכת הרשימה ---------------- */
   #edit{min-height:100%;padding-bottom:calc(var(--sab) + 40px)}
-  .btn-done{flex:none;padding:11px 18px;border-radius:999px;background:var(--yellow);color:var(--navy);font:400 18px/1 var(--f-head);box-shadow:0 3px 0 var(--yellow-d)}
-  .btn-done:active{transform:translateY(2px);box-shadow:0 1px 0 var(--yellow-d)}
+  .btn-done{flex:none;height:34px;padding:0 16px;border-radius:999px;background:var(--yellow);color:var(--navy);font:400 15px/1 var(--f-head)}
+  .btn-done:active{transform:scale(.96)}
   .ed-hint{margin:0 18px 4px;color:var(--muted);font-size:14px;line-height:1.4}
   .cat h3 .ed-cat{display:flex;align-items:center;gap:6px;padding:6px 10px;margin:-6px -10px;border-radius:12px;color:var(--yellow);font:inherit}
   .cat h3 .ed-cat:active{background:rgba(255,255,255,.06)}
@@ -172,14 +197,14 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   .erow:first-child{border-top:0}
   .erow:active{background:rgba(255,255,255,.05)}
   .erow .names{flex:1;min-width:0}
-  .erow .n1{display:block;font:500 17px/1.3 var(--f-body)}
-  .erow .n2{display:block;margin-top:2px;font-size:14px;color:var(--muted)}
+  .erow .n1{display:block;font:400 16px/1.3 var(--f-body)}
+  .erow .n2{display:block;margin-top:2px;font-size:13px;color:var(--muted)}
   .erow .n2.missing{color:#e9a33d}
   .erow .pen{opacity:.5}
-  .erow.add{color:var(--yellow);font:500 17px/1 var(--f-body);justify-content:flex-start}
+  .erow.add{color:var(--yellow);font:500 15px/1 var(--f-body);justify-content:flex-start}
   .erow.add .plus{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;border:2px dashed rgba(244,224,77,.6);font-size:20px;line-height:1}
   .btn-addcat{display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 24px);margin:22px 12px 0;padding:16px;border-radius:18px;
-    border:2px dashed rgba(244,224,77,.5);color:var(--yellow);font:400 19px/1 var(--f-head)}
+    border:1.5px dashed rgba(244,224,77,.45);color:var(--yellow);font:400 16px/1 var(--f-head)}
   .reset{display:block;margin:28px auto 0;padding:10px 18px;color:var(--muted);font-size:14px;text-decoration:underline;text-underline-offset:3px}
 
   /* חלון עריכה של מוצר / קטגוריה */
@@ -188,22 +213,22 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   .field{display:block;margin-top:16px}
   .field span{display:block;margin:0 4px 6px;font-size:14px;color:var(--muted)}
   .field input{width:100%;padding:14px 16px;border-radius:14px;border:1.5px solid rgba(255,255,255,.18);background:var(--navy);color:#fff;
-    font:500 18px/1.2 var(--f-body);outline:none}
+    font:500 16px/1.2 var(--f-body);outline:none}
   .field input:focus{border-color:var(--yellow)}
   .err{margin:10px 4px 0;color:#ff8a78;font-size:14px}
-  .btn-del{display:block;width:100%;margin-top:10px;padding:14px;border-radius:999px;font:500 17px/1.2 var(--f-body);color:#ff8a78;background:rgba(226,86,63,.12)}
+  .btn-del{display:block;width:100%;margin-top:10px;padding:13px;border-radius:999px;font:500 15px/1.2 var(--f-body);color:#ff8a78;background:rgba(226,86,63,.12)}
   .btn-del.sure{background:var(--red);color:#fff}
 
   /* ---------------- חלון שאלה + הודעה קצרה ---------------- */
   .modal{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:rgba(6,8,26,.7);
     -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);animation:fade .2s ease}
   .sheet{width:100%;max-width:360px;background:var(--navy-2);border-radius:24px;padding:24px 20px 20px;text-align:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 20px 50px rgba(0,0,0,.5)}
-  .sheet h4{margin:0;font:400 24px/1.2 var(--f-head);color:#fff}
-  .sheet p{margin:8px 0 0;color:var(--muted);font-size:16px;line-height:1.45}
-  .sheet .btn-yellow{margin-top:20px;font-size:22px;padding:14px}
-  .btn-ghost{display:block;width:100%;margin-top:10px;padding:14px;border-radius:999px;font:500 17px/1 var(--f-body);color:var(--ink);background:rgba(255,255,255,.07)}
+  .sheet h4{margin:0;font:400 20px/1.25 var(--f-head);color:#fff}
+  .sheet p{margin:8px 0 0;color:var(--muted);font-size:15px;line-height:1.45}
+  .sheet .btn-yellow{margin-top:20px;font-size:17px;padding:13px}
+  .btn-ghost{display:block;width:100%;margin-top:10px;padding:13px;border-radius:999px;font:500 15px/1 var(--f-body);color:var(--ink);background:rgba(255,255,255,.07)}
   .toast{position:fixed;left:50%;bottom:calc(var(--sab) + 110px);z-index:40;transform:translateX(-50%);padding:12px 18px;border-radius:999px;
-    background:#fff;color:var(--navy);font:500 16px/1.2 var(--f-body);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fade .2s ease;white-space:nowrap}
+    background:#fff;color:var(--navy);font:500 14.5px/1.2 var(--f-body);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fade .2s ease;white-space:nowrap}
   @keyframes fade{from{opacity:0}}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -213,6 +238,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
 <!-- מסך פתיחה -->
 <section id="splash" aria-label="מסך פתיחה">
   <button class="btn-lang" data-lang-btn type="button"></button>
+  <button class="btn-sound" data-sound-btn type="button"><svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/><path d="M3 3l18 18"/></svg></button>
   <img class="logo" id="logo" alt="Pizza For The People">
   <div class="tagline">PIZZA FOR THE PEOPLE · JAFFA</div>
   <div class="crew"><img id="crew" alt="אודי ויאיר"></div>
@@ -235,10 +261,11 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
   <div id="cats"></div>
   <div class="tools">
     <button class="btn-edit" id="openEdit" type="button">✏️ <span data-t="editList">עריכת הרשימה</span></button>
+    <button class="btn-edit" data-sound-btn data-sound-label type="button">♫ <span class="snd-lbl"></span></button>
     <button class="clear-all" id="clearAll" hidden data-t="clearAll">ניקוי כל הסימונים</button>
   </div>
   <div class="bar">
-    <button class="btn-yellow" id="send"><span data-t="send">שלח לדור</span> <span class="count" id="count">0</span></button>
+    <button class="btn-send" id="send" type="button"><span class="wa"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#f4e04d" d="M12 2.2a9.7 9.7 0 0 0-8.4 14.6L2.3 21.8l5.1-1.3A9.7 9.7 0 1 0 12 2.2zm0 17.7a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 19.9zm4.4-6c-.2-.1-1.4-.7-1.7-.8-.2-.1-.4-.1-.5.1l-.8.9c-.1.2-.3.2-.5.1a6.6 6.6 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.5-.4h-.5a.9.9 0 0 0-.6.3 2.7 2.7 0 0 0-.8 2 4.7 4.7 0 0 0 1 2.5 10.7 10.7 0 0 0 4.1 3.6c1.5.7 2.1.7 2.9.6.5-.1 1.4-.6 1.6-1.1.2-.6.2-1 .1-1.1l-.4-.3z"/></svg></span><span class="lbl"><b data-t="send">שלח לדור</b><small data-t="sendSub">בוואטסאפ, עם התאריך</small></span><span class="count" id="count">0</span></button>
   </div>
 </main>
 
@@ -308,7 +335,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     he: {
       langBtn: 'عربي', langBtnLabel: 'التبديل إلى العربية',
       splashTitle: 'מה חסר היום?', splashSub: 'מסמנים, שולחים לדור, וחוזרים לתנור', start: 'מתחילים',
-      invTitle: 'מה חסר?', ninja: "פיצה נינג'ה", ninjaShort: "נינג'ה", send: 'שלח לדור', clearAll: 'ניקוי כל הסימונים',
+      invTitle: 'מה חסר?', ninja: "פיצה נינג'ה", ninjaShort: "נינג'ה", send: 'שלח לדור', sendSub: 'בוואטסאפ, עם התאריך', musicOn: 'מוזיקה: פועלת', musicOff: 'מוזיקה: כבויה', clearAll: 'ניקוי כל הסימונים',
       missingN: n => `${n} חסרים`,
       sentT: 'נשלח לדור?', sentP: 'לנקות את הסימונים ולהתחיל רשימה חדשה?',
       clearT: 'לנקות הכל?', clearP: 'כל הסימונים יימחקו.',
@@ -331,7 +358,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     ar: {
       langBtn: 'עברית', langBtnLabel: 'מעבר לעברית',
       splashTitle: 'شو ناقص اليوم؟', splashSub: 'بنعلّم، بنبعت لدور، وبنرجع عالفرن', start: 'يلّا نبلّش',
-      invTitle: 'شو ناقص؟', ninja: 'بيتسا نينجا', ninjaShort: 'نينجا', send: 'ابعث لدور', clearAll: 'امسح كل العلامات',
+      invTitle: 'شو ناقص؟', ninja: 'بيتسا نينجا', ninjaShort: 'نينجا', send: 'ابعث لدور', sendSub: 'عالواتساب، مع التاريخ', musicOn: 'موسيقى: شغّالة', musicOff: 'موسيقى: طافية', clearAll: 'امسح كل العلامات',
       missingN: n => `ناقص ${n}`,
       sentT: 'انبعتت لدور؟', sentP: 'نمسح العلامات ونبلّش قائمة جديدة؟',
       clearT: 'نمسح كل إشي؟', clearP: 'كل العلامات رح تنمسح.',
@@ -430,6 +457,7 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
       sec.querySelector('h3 span').textContent = n ? t('missingN')(n) : '';
     });
     $('count').textContent = marked.size;
+    $('send').classList.toggle('empty', marked.size === 0);
     $('clearAll').hidden = marked.size === 0;
     $('dateLine').textContent = dateStr();
   }
@@ -574,13 +602,60 @@ const IMG_CREW  = 'https://d8j0ntlcm91z4.cloudfront.net/user_3KW2YTi9wKUIJMvG3be
     store.del(CAT_KEY); isEdited = false; catalog = fromCode(); pruneMarks(); buildEdit(); build(); toast(t('resetDone'));
   }));
 
+  /* ================= מוזיקת רקע ================= */
+  const MUSIC_KEY = 'p4p-music';
+  let musicOn = store.get(MUSIC_KEY) !== 'off';
+  let audio = null, unlocked = false;
+  function ensureAudio() {
+    if (audio || !MUSIC_URL) return audio;
+    audio = new Audio(MUSIC_URL); audio.loop = true; audio.preload = 'auto'; audio.volume = 0;
+    return audio;
+  }
+  function fadeTo(target, ms = 1200) {
+    if (!audio) return;
+    const from = audio.volume, t0 = performance.now();
+    const step = now => {
+      const k = Math.min(1, (now - t0) / ms);
+      try { audio.volume = from + (target - from) * k; } catch {}
+      if (k < 1) requestAnimationFrame(step); else if (target === 0) audio.pause();
+    };
+    requestAnimationFrame(step);
+  }
+  function playMusic() {
+    if (!musicOn || !ensureAudio()) return;
+    const p = audio.play(); if (p && p.catch) p.catch(() => {});
+    fadeTo(MUSIC_VOLUME, 1800);
+  }
+  const stopMusic = () => fadeTo(0, 500);
+  function renderSound() {
+    document.querySelectorAll('[data-sound-btn]').forEach(b => {
+      b.classList.toggle('muted', !musicOn);
+      b.setAttribute('aria-label', t(musicOn ? 'musicOn' : 'musicOff'));
+      const l = b.querySelector('.snd-lbl'); if (l) l.textContent = t(musicOn ? 'musicOn' : 'musicOff');
+    });
+  }
+  // הלחיצה הראשונה בדף "פותחת" את הסאונד
+  const unlock = () => { if (unlocked) return; unlocked = true; playMusic(); };
+  document.addEventListener('pointerdown', unlock, { capture: true });
+  document.addEventListener('keydown', unlock, { capture: true });
+  document.querySelectorAll('[data-sound-btn]').forEach(b => b.addEventListener('click', () => {
+    musicOn = !musicOn; store.set(MUSIC_KEY, musicOn ? 'on' : 'off'); renderSound();
+    musicOn ? playMusic() : stopMusic();
+  }));
+  // כשיוצאים מהאפליקציה (למשל לוואטסאפ) – המוזיקה נעצרת, וחוזרת כשחוזרים
+  document.addEventListener('visibilitychange', () => {
+    if (!audio) return;
+    if (document.visibilityState === 'hidden') audio.pause(); else if (musicOn && unlocked) playMusic();
+  });
+  addEventListener('pagehide', () => { if (audio) audio.pause(); });
+
   /* ================= שפה ================= */
   function applyLang() {
     document.documentElement.lang = lang;
     document.title = t('title');
     document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
     document.querySelectorAll('[data-lang-btn]').forEach(b => { b.textContent = t('langBtn'); b.setAttribute('aria-label', t('langBtnLabel')); });
-    build(); buildEdit();
+    renderSound(); build(); buildEdit();
   }
   document.querySelectorAll('[data-lang-btn]').forEach(b => b.addEventListener('click', () => {
     lang = other(lang); store.set(LANG_KEY, lang); applyLang();
