@@ -217,6 +217,7 @@ import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* =========================================================
    הבירה שלה – אב טיפוס
@@ -695,6 +696,11 @@ function spawnCrowd(LC){
   IM.torso.count = IM.head.count = IM.hair.count = IM.hairLong.count = IM.skirt.count = IM.shadow.count = dancers.length;
 }
 const crowdPose = newPose();
+function blocksView(x, z){ // standing near the line from the lens to him (and not right next to him)
+  const ax = camera.position.x, az = camera.position.z, bx = PL.pos.x - ax, bz = PL.pos.z - az, L2 = bx*bx + bz*bz || 1;
+  const u = clamp(((x - ax)*bx + (z - az)*bz)/L2, 0, 1), dx = x - (ax + bx*u), dz = z - (az + bz*u);
+  return Math.hypot(x - ax, z - az) < 1.25 || (u < .85 && dx*dx + dz*dz < .5*.5);
+}
 function updateCrowd(dt, beat){
   for (let i = 0; i < dancers.length; i++){
     const d = dancers[i], t = beat + d.ph*4;
@@ -723,7 +729,7 @@ function updateCrowd(dt, beat){
     IM.skirt.setMatrixAt(i, d.female ? R.parts.skirt.matrixWorld : ZERO);
     _m4.compose(_p3.set(d.x, .012, d.z), _q.identity(), _s3.set(.95*d.w, 1, .95*d.w)); IM.shadow.setMatrixAt(i, _m4);
     // anyone standing right in front of the lens is hidden so they don't block the view
-    if (Math.hypot(d.x - camera.position.x, d.z - camera.position.z) < 1.25 && camera.position.y < 4){
+    if (camera.position.y < 4 && blocksView(d.x, d.z)){
       for (const k of ['torso','head','hair','hairLong','skirt']) IM[k].setMatrixAt(i, ZERO);
       for (const k of ['leg','arm']){ IM[k].setMatrixAt(2*i, ZERO); IM[k].setMatrixAt(2*i+1, ZERO); }
     }
@@ -760,6 +766,27 @@ const foam = new THREE.Mesh(new THREE.CylinderGeometry(.049, .049, .028, 18), PM
 glass.add(new THREE.Mesh(new THREE.CylinderGeometry(.053, .042, .175, 18, 1, true), PM.glass));
 { const base = new THREE.Mesh(new THREE.CylinderGeometry(.042, .042, .012, 18), PM.glass); base.position.y = -.085; glass.add(base); }
 scene.add(player.root);
+// ---- the real 3D hero (assets/hero.glb). Until it loads, the simple capsule hero above stands in. ----
+const HERO_URL = 'assets/hero.glb';
+const heroM = { ready: false };
+new GLTFLoader().load(HERO_URL, g => {
+  const root = g.scene, bones = {};
+  root.traverse(o => {
+    if (o.isMesh){ o.frustumCulled = false; if (o.material){ o.material.envMap = ENV; o.material.envMapIntensity = .2; o.material.color.multiplyScalar(.78); } }
+    if (o.isBone) bones[o.name] = o;
+  });
+  const clip = g.animations[0];
+  for (const tr of clip.tracks) if (tr.name.endsWith('Hips.position')) for (let i = 0; i < tr.values.length; i += 3){ tr.values[i] = 0; tr.values[i+2] = 0; } // walk on the spot; the game moves him
+  const mixer = new THREE.AnimationMixer(root), act = mixer.clipAction(clip); act.play();
+  scene.add(root); player.root.visible = false; scene.attach(glass); glass.scale.setScalar(1.35); playerLight.intensity = 1.2;
+  Object.assign(heroM, { ready: true, root, mixer, act, bones });
+}, undefined, e => console.warn('hero model did not load, using the simple one', e));
+const _bq = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _ya = new THREE.Vector3(), _aim = new THREE.Vector3(), _hp = new THREE.Vector3();
+function aimBone(bone, dir){ // turn a bone so it points along a world direction (bones point along their local +Y)
+  bone.getWorldQuaternion(_bq); _ya.set(0, 1, 0).applyQuaternion(_bq);
+  _pq.setFromUnitVectors(_ya, dir).multiply(_bq);
+  bone.parent.getWorldQuaternion(_bq); bone.quaternion.copy(_bq.invert().multiply(_pq)); bone.updateMatrixWorld(true);
+}
 const pShadow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI/2), shadowMat); scene.add(pShadow);
 const pRing = new THREE.Mesh(new THREE.RingGeometry(.42, .52, 48).rotateX(-Math.PI/2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc45a).multiplyScalar(2.2), transparent:true, opacity:.75, blending:THREE.AdditiveBlending, depthWrite:false }));
 scene.add(pRing);
@@ -1085,7 +1112,22 @@ function updatePlayer(dt, t){
   PL.walk += (sp + PL.knock.length())*dt*4.6; PL.stagger = Math.max(0, PL.stagger - dt); PL.hitCD -= dt; PL.tilt *= Math.exp(-dt*5);
   if (play && PL.pos.distanceTo(HER) < 1.2) win();
 }
-function posePlayer(t){
+function poseHeroModel(t, dt){
+  const H = heroM, sp = PL.vel.length(), fx = Math.sin(PL.yaw), fz = Math.cos(PL.yaw), rx = -fz, rz = fx;
+  H.root.position.set(PL.pos.x, 0, PL.pos.z); H.root.rotation.set(0, PL.yaw, 0);
+  if (PL.stagger > 0) H.root.rotateZ(Math.sin(t*30)*.06);
+  H.act.timeScale = sp > .04 ? sp/.85 : 0; H.mixer.update(dt);
+  H.root.updateMatrixWorld(true);
+  // right arm holds the beer out in front: upper arm down-forward, forearm forward
+  const won = G.state.startsWith('won'), lost = G.state.startsWith('lost');
+  const sway = .04*Math.sin(t*2.3);
+  aimBone(H.bones.RightArm, _aim.set(fx*.35 + rx*.12, -1, fz*.35 + rz*.12).normalize());
+  aimBone(H.bones.RightForeArm, won ? _aim.set(fx*.6, 1, fz*.6).normalize() : lost ? _aim.set(fx*.2, -1, fz*.2).normalize() : _aim.set(fx + rx*(-.15 + sway), .12, fz + rz*(-.15 + sway)).normalize());
+  H.bones.RightHand.getWorldPosition(_hp);
+  glass.position.set(_hp.x + fx*.06, _hp.y - .02, _hp.z + fz*.06);
+  glass.rotation.set(0, PL.yaw, 0); glass.rotateX(PL.tilt*Math.sin(t*14));
+}
+function posePlayer(t, dt){
   const p = resetPose(plPose), sp = PL.vel.length(), k = Math.min(1, sp/CFG.WALK), s = Math.sin(PL.walk), dr = LC.drunk;
   p.legL = .62*s*k; p.legR = -.62*s*k; p.bob = -.035*Math.abs(Math.cos(PL.walk))*k;
   p.aLx = -.45*s*k - .05; p.aLz = .14; p.aRx = -.85 + .05*Math.sin(t*3); p.aRz = -.3;
@@ -1097,8 +1139,8 @@ function posePlayer(t){
   if (G.state === 'menu'){ const sb = Math.sin(Math.PI*AudioSys.beat()); p.bob = -.04*Math.abs(sb); p.roll += .08*sb; }
   applyPose(player, p);
   player.root.position.set(PL.pos.x, 0, PL.pos.z); player.root.rotation.y = PL.yaw;
-  glass.rotation.x = -player.armR.rotation.x - player.torso.rotation.x + PL.tilt*Math.sin(t*14);
-  glass.rotation.z = -player.armR.rotation.z;
+  if (heroM.ready) poseHeroModel(t, dt);
+  else { glass.rotation.x = -player.armR.rotation.x - player.torso.rotation.x + PL.tilt*Math.sin(t*14); glass.rotation.z = -player.armR.rotation.z; }
   const b = Math.max(.001, G.beer/100); liquid.scale.y = b; foam.position.y = -.075 + .15*b + .01; foam.visible = G.beer > .5;
   pShadow.position.set(PL.pos.x, .014, PL.pos.z); pShadow.scale.set(.95, 1, .95);
   pRing.position.set(PL.pos.x, .022, PL.pos.z); pRing.material.opacity = .45 + .3*Math.sin(t*4);
@@ -1192,7 +1234,7 @@ function update(dt, beat){
   updateSwitches(dt);
   updateCrowd(dt, beat);
   updatePlayer(dt, clock);
-  posePlayer(clock); poseHer(clock, beat); poseDJ(beat);
+  posePlayer(clock, dt); poseHer(clock, beat); poseDJ(beat);
   updateClub(dt, clock, beat);
   updateParticles(drops, dt, 9.8); updateParticles(hearts, dt, -.6);
   updateCamera(dt, clock, beat);
@@ -1209,7 +1251,7 @@ requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); $('loading'
 
 // hook for automated testing
 let simBeat = 0;
-window.__club = { G, PL, cam, SW, dancers, input, startLevel, setMode, useBroadcast, renderer, get LC(){ return LC; },
+window.__club = { heroM, G, PL, cam, SW, dancers, input, startLevel, setMode, useBroadcast, renderer, get LC(){ return LC; },
   sim(sec, fn){ for (let t = 0; t < sec; t += 1/60){ if (fn) fn(t); simBeat += CFG.BPM/60/60; update(1/60, simBeat); } } };
 </script>
 </body>
