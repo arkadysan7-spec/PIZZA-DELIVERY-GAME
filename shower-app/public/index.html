@@ -6,12 +6,12 @@
   <title>הדמיית מקלחונים</title>
   <meta name="theme-color" content="#0f3d4c">
   <meta name="description" content="צילום חדר רחצה, בחירת מקלחון והדמיה פוטוריאליסטית ללקוח">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="icon" href="/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
@@ -140,21 +140,29 @@
 
   <!-- dialogs -->
   <dialog id="customerDialog">
-    <form method="dialog" id="customerForm">
+    <form id="customerForm" novalidate>
       <h2 id="customerDialogTitle">לקוח חדש</h2>
-      <label>שם<input name="name" required autocomplete="name"></label>
-      <label>טלפון (לוואטסאפ)<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000"></label>
-      <label>כתובת<input name="address" autocomplete="street-address"></label>
+      <label>שם<input name="name" id="custNameInput" required autocomplete="name"></label>
+      <label>טלפון (לוואטסאפ)<input name="phone" id="custPhoneInput" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000"></label>
+      <label>כתובת<input name="address" id="custAddressInput" autocomplete="street-address"></label>
       <div class="row two">
-        <button class="btn" value="cancel" formnovalidate>ביטול</button>
-        <button class="btn primary" value="ok">שמירה</button>
+        <button class="btn" type="button" data-close="cancel">ביטול</button>
+        <button class="btn primary" type="submit">שמירה</button>
       </div>
-      <button class="btn danger small" id="deleteCustomerBtn" value="delete" formnovalidate hidden>מחיקת לקוח וכל ההדמיות</button>
+      <button class="btn danger small" type="button" id="deleteCustomerBtn" data-close="delete" hidden>מחיקת לקוח וכל ההדמיות</button>
     </form>
   </dialog>
 
+  <dialog id="confirmDialog">
+    <p id="confirmText"></p>
+    <div class="row two">
+      <button class="btn" type="button" data-close="no">ביטול</button>
+      <button class="btn primary danger-fill" type="button" data-close="yes">מחיקה</button>
+    </div>
+  </dialog>
+
   <dialog id="settingsDialog">
-    <form method="dialog">
+    <form id="settingsForm">
       <h2>הגדרות</h2>
       <label>קוד גישה<input id="accessCode" type="password" autocomplete="current-password"></label>
       <label>מודל הדמיה<select id="providerSelect"></select></label>
@@ -162,12 +170,12 @@
       <p class="muted small" id="serverStatus"></p>
       <div class="row two">
         <button class="btn" type="button" id="refreshCatalog">רענון קטלוג מהאתר</button>
-        <button class="btn primary" value="ok">סגירה</button>
+        <button class="btn primary" type="submit">סגירה</button>
       </div>
     </form>
   </dialog>
 
   <div class="toast" id="toast" hidden></div>
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

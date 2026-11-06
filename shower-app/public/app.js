@@ -1,9 +1,17 @@
 // Shower enclosure visualizer – client (vanilla JS, no build step).
 import { db } from './db.js';
 import { drawSketch, FINISH_COLORS } from './sketch.js';
+import { DEMO_CATALOG } from './demo-catalog.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+
+document.documentElement.lang = 'he';
+document.documentElement.dir = 'rtl';
+// STATIC_DEMO: page published without the server (e.g. a shared preview link). Everything runs locally.
+const STATIC_DEMO = Boolean(window.__STATIC_DEMO);
+let EMBEDDED = false;
+try { EMBEDDED = window.self !== window.top; } catch { EMBEDDED = true; }
 
 // ---------------- settings / server config ----------------
 const settings = {
@@ -23,7 +31,8 @@ function ls(k, v) {
 let server = { providers: [], defaultProvider: 'mock', mock: true, accessCodeRequired: false, cloudLinks: false };
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  if (STATIC_DEMO) throw new Error('offline demo');
+  const res = await fetch(path.replace(/^\//, ''), {
     ...opts,
     headers: { 'content-type': 'application/json', 'x-access-code': settings.accessCode, ...(opts.headers || {}) },
   });
@@ -73,7 +82,11 @@ const navStack = [];
 const TITLES = { customers: 'הדמיית מקלחונים', customer: 'לקוח', wizard: 'הדמיה חדשה', viewer: 'הדמיה' };
 function show(view, { push = true } = {}) {
   $$('.view').forEach((v) => (v.hidden = v.id !== `view-${view}`));
-  if (push) { navStack.push(view); history.pushState({ view }, ''); }
+  if (push) {
+    navStack.push(view);
+    // Inside a frame, history entries are shared with the host page, so only use them standalone.
+    if (!EMBEDDED) try { history.pushState({ view }, ''); } catch { /* ignore */ }
+  }
   $('#backBtn').hidden = navStack.length <= 1;
   $('#title').textContent = view === 'customer' && state.customer ? state.customer.name
     : view === 'wizard' && state.customer ? `הדמיה – ${state.customer.name}` : TITLES[view];
@@ -88,7 +101,26 @@ function back() {
   if (v === 'customers') renderCustomers();
 }
 window.addEventListener('popstate', () => back());
-$('#backBtn').onclick = () => history.back();
+function goBack() {
+  if (EMBEDDED) return back();
+  history.back();
+}
+$('#backBtn').onclick = goBack;
+
+// In-page confirmation (window.confirm is unavailable in some embedded views).
+function askConfirm(text, yesLabel = 'מחיקה') {
+  const dlg = $('#confirmDialog');
+  $('#confirmText').textContent = text;
+  $('[data-close="yes"]', dlg).textContent = yesLabel;
+  dlg.returnValue = '';
+  dlg.showModal();
+  return new Promise((resolve) => { dlg.onclose = () => resolve(dlg.returnValue === 'yes'); });
+}
+// Buttons with data-close="value" close their dialog with that value.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-close]');
+  if (b) b.closest('dialog')?.close(b.dataset.close);
+});
 
 // ---------------- toast ----------------
 let toastTimer;
@@ -139,12 +171,17 @@ function editCustomer(c) {
   $('#deleteCustomerBtn').hidden = !c;
   dlg.returnValue = '';
   dlg.showModal();
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    if (!f.name.value.trim()) { f.name.focus(); return toast('חסר שם לקוח'); }
+    dlg.close('ok');
+  };
   dlg.onclose = async () => {
     if (dlg.returnValue === 'ok' && f.name.value.trim()) {
       const rec = { ...(c || { id: uid(), createdAt: Date.now() }), name: f.name.value.trim(), phone: f.phone.value.trim(), address: f.address.value.trim() };
       await db.putCustomer(rec);
       if (c) { state.customer = rec; show('customer', { push: false }); renderHistory(); } else openCustomer(rec);
-    } else if (dlg.returnValue === 'delete' && c && confirm(`למחוק את ${c.name} וכל ההדמיות שלו?`)) {
+    } else if (dlg.returnValue === 'delete' && c && await askConfirm(`למחוק את ${c.name} וכל ההדמיות שלו?`)) {
       await db.deleteCustomer(c.id);
       navStack.length = 0; show('customers'); renderCustomers();
     }
@@ -248,13 +285,16 @@ async function loadCatalog(force = false) {
   }
   try {
     const data = await api(`/api/catalog${force ? '?refresh=1' : ''}`, { headers: {} });
-    state.catalog = data.products || [];
+    if (!Array.isArray(data.products)) throw new Error('bad catalog');
+    state.catalog = data.products;
     ls('catalog', JSON.stringify({ products: state.catalog, note: data.note, at: Date.now() }));
     $('#catalogNote').hidden = !data.note;
     $('#catalogNote').textContent = data.note || '';
     if (force) toast(`נטענו ${state.catalog.length} מוצרים (${data.source})`);
   } catch (e) {
-    if (!state.catalog.length) toast('אין חיבור לקטלוג');
+    if (!state.catalog.length) state.catalog = DEMO_CATALOG;
+    if (STATIC_DEMO) { $('#catalogNote').hidden = false; $('#catalogNote').textContent = 'גרסת הדגמה – קטלוג לדוגמה. בגרסה המלאה המוצרים נטענים מהאתר של העסק.'; }
+    else if (force) toast('אין חיבור לקטלוג');
   }
   if (state.step === 2 && !$('#view-wizard').hidden) renderCatalog();
 }
@@ -426,7 +466,7 @@ async function runRender() {
     const [photo, guideBlob] = [await blobToB64(state.photo.blob), await buildGuide()];
     const guide = await blobToB64(guideBlob);
     const productImageUrl = state.product.images.find((u) => /^https?:/.test(u)) || null;
-    const res = await api('/api/render', {
+    const res = STATIC_DEMO ? await localMock(guide) : await api('/api/render', {
       method: 'POST',
       body: JSON.stringify({
         photo, guide, productImageUrl, width: state.photo.width, height: state.photo.height,
@@ -446,7 +486,7 @@ async function runRender() {
     state.lastResult = rec;
     showResult($('#resultWrap'), rec, { wizard: true });
     $('#resultWrap').hidden = false;
-    if (res.mock) toast('מצב הדגמה: אין מפתח API בשרת – מוצגת הסקיצה', 4500);
+    if (res.mock) toast('גרסת הדגמה: מוצגת הסקיצה. בגרסה המלאה כאן מופיעה הדמיה פוטוריאליסטית.', 5000);
   } catch (e) {
     console.error(e);
     $('#renderError').hidden = false;
@@ -460,6 +500,13 @@ async function runRender() {
     rendering = false;
     $('#renderWait').hidden = true;
   }
+}
+
+// Demo without a server: show the placement sketch as the "result" so the whole flow can be tried.
+async function localMock(guide) {
+  await new Promise((r) => setTimeout(r, 1500));
+  return { image: `data:image/jpeg;base64,${guide}`, provider: 'mock', model: 'הדגמה', mock: true,
+    prompt: 'בגרסה המלאה נשלחת כאן הנחיה מפורטת למודל התמונה (Nano Banana Pro / GPT Image), יחד עם התמונה, הסקיצה ותמונת המוצר.' };
 }
 
 // ---------------- result + viewer ----------------
@@ -488,10 +535,10 @@ function showResult(container, rec, { wizard = false } = {}) {
   const btn = (label, cls, fn) => Object.assign(el('button', { class: `btn ${cls}` }, [label]), { onclick: fn });
   const actions = el('div', { class: 'result-actions' }, [
     btn('📤 שליחה בוואטסאפ', 'wa full', () => shareImage(rec)),
-    btn('💬 צ׳אט עם הלקוח', '', () => openWhatsApp(rec)),
-    btn('⬇ הורדה', '', () => download(rec)),
+    Object.assign(el('a', { class: 'btn', href: waLink(rec), target: '_blank', rel: 'noopener' }, ['💬 צ׳אט עם הלקוח'])),
+    ...(EMBEDDED ? [] : [btn('⬇ הורדה', '', () => download(rec))]),
     ...(wizard ? [btn('🔄 צור שוב', '', runRender), btn('✏️ שינוי מיקום', '', () => goStep(3))] : [
-      btn('🗑 מחיקה', '', async () => { if (confirm('למחוק את ההדמיה?')) { await db.deleteRender(rec.id); history.back(); } }),
+      btn('🗑 מחיקה', '', async () => { if (await askConfirm('למחוק את ההדמיה?')) { await db.deleteRender(rec.id); goBack(); } }),
       btn('🔁 הדמיה דומה', '', () => reuse(rec)),
     ]),
   ]);
@@ -539,15 +586,16 @@ async function shareImage(rec) {
       if (e.name === 'AbortError') return;
     }
   }
+  if (EMBEDDED) return toast('בגרסת ההדגמה אי אפשר לצרף קובץ. בגרסה המלאה נפתח כאן שיתוף לוואטסאפ עם התמונה.', 5000);
   // Desktop / unsupported: download the image and open the chat so it can be attached.
   download(rec);
-  openWhatsApp(rec);
+  window.open(waLink(rec), '_blank', 'noopener');
   toast('התמונה ירדה למכשיר – צרפו אותה בצ׳אט', 4500);
 }
-function openWhatsApp(rec) {
+function waLink(rec) {
   const phone = normalizePhone(state.customer?.phone);
   const text = encodeURIComponent(shareText(rec));
-  window.open(phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`, '_blank', 'noopener');
+  return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
 }
 function normalizePhone(p) {
   if (!p) return '';
@@ -571,13 +619,14 @@ function openSettings() {
   sel.replaceChildren(...opts.map((p) => el('option', { value: p.id }, [`${p.label}${p.model ? ` – ${p.model}` : ''}`])));
   sel.value = settings.provider && opts.some((o) => o.id === settings.provider) ? settings.provider : server.defaultProvider;
   $('#serverStatus').textContent = [
-    server.mock ? '⚠ אין מפתח API בשרת – מצב הדגמה.' : `✓ ${server.providers.length} ספקי הדמיה מוגדרים.`,
+    STATIC_DEMO ? 'גרסת הדגמה בלי שרת.' : server.mock ? '⚠ אין מפתח API בשרת – מצב הדגמה.' : `✓ ${server.providers.length} ספקי הדמיה מוגדרים.`,
     server.catalogConfigured ? '✓ קטלוג מהאתר.' : 'קטלוג הדגמה (CATALOG_URL לא הוגדר).',
     server.cloudLinks ? '✓ קישורי ענן לתמונות.' : '',
   ].join(' ');
   $('#settingsDialog').showModal();
 }
 $('#settingsBtn').onclick = openSettings;
+$('#settingsForm').onsubmit = (e) => { e.preventDefault(); $('#settingsDialog').close('ok'); };
 $('#settingsDialog').onclose = () => {
   settings.accessCode = $('#accessCode').value.trim();
   settings.bizName = $('#bizName').value.trim();
@@ -605,11 +654,12 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Ma
   show('customers');
   renderCustomers();
   try {
-    server = await api('/api/config', { headers: {} });
+    const cfg = await api('/api/config', { headers: {} });
+    if (Array.isArray(cfg.providers)) server = cfg;
     if (server.accessCodeRequired && !settings.accessCode) { toast('הזינו קוד גישה'); openSettings(); }
-  } catch { /* offline */ }
+  } catch { /* offline or static demo */ }
   loadCatalog();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if (!STATIC_DEMO && !EMBEDDED && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
   try { await navigator.storage?.persist?.(); } catch { /* ignore */ }
 })();
 

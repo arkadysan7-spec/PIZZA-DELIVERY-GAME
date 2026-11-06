@@ -28,7 +28,7 @@ async function tx(stores, mode, fn) {
 }
 const reqP = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 
-export const db = {
+const idb = {
   async customers() {
     const all = await tx('customers', 'readonly', (t) => reqP(t.objectStore('customers').getAll()));
     return all.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
@@ -71,3 +71,31 @@ export const db = {
     return tx('renders', 'readwrite', (t) => t.objectStore('renders').delete(id));
   },
 };
+
+// In-memory fallback when IndexedDB is unavailable (private mode, blocked site data).
+const mem = { customers: new Map(), renders: new Map() };
+const memDb = {
+  async customers() { return [...mem.customers.values()].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)); },
+  async putCustomer(c) { mem.customers.set(c.id, { ...c, updatedAt: Date.now() }); },
+  async deleteCustomer(id) { mem.customers.delete(id); for (const [k, r] of mem.renders) if (r.customerId === id) mem.renders.delete(k); },
+  async rendersFor(id) { return [...mem.renders.values()].filter((r) => r.customerId === id).sort((a, b) => b.createdAt - a.createdAt); },
+  async renderCounts() { const c = {}; for (const r of mem.renders.values()) c[r.customerId] = (c[r.customerId] || 0) + 1; return c; },
+  async putRender(r) { mem.renders.set(r.id, r); const c = mem.customers.get(r.customerId); if (c) await this.putCustomer(c); },
+  async deleteRender(id) { mem.renders.delete(id); },
+};
+
+let impl = null;
+async function pick() {
+  if (impl) return impl;
+  try {
+    if (!('indexedDB' in self)) throw new Error('no idb');
+    await open();
+    impl = idb;
+  } catch {
+    impl = memDb;
+  }
+  return impl;
+}
+export const db = new Proxy({}, {
+  get: (_, name) => async (...args) => (await pick())[name](...args),
+});
