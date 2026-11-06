@@ -447,6 +447,14 @@ async function buildGuide() {
   drawSketch(ctx, c.width, c.height, state.quad, state.spec);
   return canvasBlob(c, 'image/jpeg', 0.85);
 }
+function dataUrlToBlob(url) {
+  const comma = url.indexOf(',');
+  const mime = url.slice(5, comma).split(';')[0] || 'image/jpeg';
+  const bin = atob(url.slice(comma + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
 const blobToB64 = (b) => new Promise((r, j) => {
   const fr = new FileReader();
   fr.onload = () => r(String(fr.result).split(',')[1]);
@@ -474,7 +482,7 @@ async function runRender() {
         spec: { ...state.spec, productName: state.product.name },
       }),
     });
-    const after = await (await fetch(res.image)).blob();
+    const after = dataUrlToBlob(res.image); // not fetch(): some hosts' CSP blocks fetching data: URLs
     const rec = {
       id: uid(), customerId: state.customer.id, createdAt: Date.now(),
       before: state.photo.blob, after, guide: guideBlob,
