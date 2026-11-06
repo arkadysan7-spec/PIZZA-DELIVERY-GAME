@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>הדמיית מקלחונים</title>
+  <meta name="theme-color" content="#0f3d4c">
+  <meta name="description" content="צילום חדר רחצה, בחירת מקלחון והדמיה פוטוריאליסטית ללקוח">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-btn" id="backBtn" aria-label="חזרה" hidden>→</button>
+    <h1 id="title">הדמיית מקלחונים</h1>
+    <button class="icon-btn" id="settingsBtn" aria-label="הגדרות">⚙</button>
+  </header>
+
+  <main id="app">
+    <!-- Customers -->
+    <section class="view" id="view-customers">
+      <div class="row">
+        <input id="customerSearch" type="search" placeholder="חיפוש לקוח…" autocomplete="off">
+      </div>
+      <ul class="list" id="customerList"></ul>
+      <p class="empty" id="customersEmpty" hidden>אין עדיין לקוחות. התחילו בהוספת לקוח.</p>
+      <button class="fab" id="addCustomerBtn">+ לקוח חדש</button>
+    </section>
+
+    <!-- Customer page: history -->
+    <section class="view" id="view-customer" hidden>
+      <div class="card customer-head">
+        <div>
+          <div class="cust-name" id="custName"></div>
+          <div class="muted" id="custMeta"></div>
+        </div>
+        <button class="btn ghost small" id="editCustomerBtn">עריכה</button>
+      </div>
+      <button class="btn primary block" id="newRenderBtn">📷 הדמיה חדשה</button>
+      <h2 class="section-title">היסטוריית הדמיות</h2>
+      <div class="grid" id="historyGrid"></div>
+      <p class="empty" id="historyEmpty" hidden>עוד אין הדמיות ללקוח הזה.</p>
+    </section>
+
+    <!-- Wizard -->
+    <section class="view" id="view-wizard" hidden>
+      <ol class="steps" id="steps">
+        <li data-step="1">צילום</li><li data-step="2">מוצר</li><li data-step="3">מיקום</li><li data-step="4">הדמיה</li>
+      </ol>
+
+      <!-- step 1 -->
+      <div class="step" data-step="1">
+        <div class="photo-drop" id="photoDrop">
+          <img id="photoPreview" alt="" hidden>
+          <div class="photo-hint" id="photoHint">צלמו את אזור המקלחת מהכניסה לחדר. שתי הפינות של הקירות והרצפה צריכות להיראות.</div>
+        </div>
+        <div class="row two">
+          <label class="btn primary">📷 צילום<input type="file" accept="image/*" capture="environment" id="cameraInput" hidden></label>
+          <label class="btn">🖼 מהגלריה<input type="file" accept="image/*" id="galleryInput" hidden></label>
+        </div>
+        <button class="btn primary block" id="toStep2" disabled>המשך לבחירת מוצר ←</button>
+      </div>
+
+      <!-- step 2 -->
+      <div class="step" data-step="2" hidden>
+        <div class="row chips" id="typeFilter"></div>
+        <p class="note" id="catalogNote" hidden></p>
+        <div class="grid products" id="productGrid"></div>
+        <div class="card" id="productOptions" hidden>
+          <div class="sel-product" id="selProduct"></div>
+          <label class="field-label">גימור פרופיל ופרזול</label>
+          <div class="chips" id="finishChips"></div>
+          <label class="field-label">עובי זכוכית</label>
+          <div class="chips" id="glassChips"></div>
+          <label class="field-label">סוג זכוכית</label>
+          <div class="chips" id="glassTypeChips"></div>
+          <button class="btn primary block" id="toStep3">המשך למיקום ←</button>
+        </div>
+      </div>
+
+      <!-- step 3 -->
+      <div class="step" data-step="3" hidden>
+        <p class="note">גררו את 4 הנקודות לפינות הזכוכית: שתיים למטה על קו הרצפה, שתיים למעלה בגובה הזכוכית.</p>
+        <div class="editor" id="editor"><canvas id="editorCanvas"></canvas></div>
+        <div class="row two"><button class="btn small" id="resetQuad">איפוס סימון</button><label class="toggle"><input type="checkbox" id="showSketch" checked> הצג סקיצה</label></div>
+
+        <div class="card form">
+          <label class="field-label">תצורה</label>
+          <div class="chips" id="layoutChips"></div>
+          <label class="field-label">צד המחיצה הקבועה (כפי שרואים בתמונה)</label>
+          <div class="chips" id="sideChips"></div>
+          <div class="row three">
+            <label>רוחב כולל (ס"מ)<input type="number" id="widthCm" inputmode="numeric" min="30" max="300"></label>
+            <label>גובה (ס"מ)<input type="number" id="heightCm" inputmode="numeric" min="150" max="260"></label>
+            <label id="doorWidthWrap">רוחב דלת<input type="number" id="doorWidthCm" inputmode="numeric" min="40" max="120"></label>
+          </div>
+          <div id="fixedHardware">
+            <label class="field-label">קיבוע המחיצה הקבועה</label>
+            <div class="chips" id="fixingChips"></div>
+            <label class="field-label">מייצב</label>
+            <div class="chips" id="stabChips"></div>
+          </div>
+          <div id="hingeWrap">
+            <label class="field-label">צירי הדלת</label>
+            <div class="chips" id="hingeChips"></div>
+          </div>
+          <details class="reno">
+            <summary>שיפוץ קירות / רצפה (אופציונלי)</summary>
+            <label class="field-label">חיפוי קירות</label>
+            <div class="chips" id="wallsChips"></div>
+            <label class="field-label">ריצוף</label>
+            <div class="chips" id="floorChips"></div>
+          </details>
+          <label class="field-label" for="notes">הערות למעצב (אופציונלי)</label>
+          <textarea id="notes" rows="2" maxlength="400" placeholder="למשל: ניקוז קווי בקיר, אגנית לבנה…"></textarea>
+        </div>
+        <button class="btn primary block" id="toStep4">✨ צור הדמיה</button>
+      </div>
+
+      <!-- step 4 -->
+      <div class="step" data-step="4" hidden>
+        <div class="render-wait" id="renderWait" hidden>
+          <div class="spinner"></div>
+          <div id="waitText">מייצר הדמיה פוטוריאליסטית… בדרך כלל 30–90 שניות</div>
+        </div>
+        <div class="error" id="renderError" hidden></div>
+        <div id="resultWrap" hidden></div>
+      </div>
+    </section>
+
+    <!-- Viewer (history item) -->
+    <section class="view" id="view-viewer" hidden>
+      <div id="viewerWrap"></div>
+    </section>
+  </main>
+
+  <!-- dialogs -->
+  <dialog id="customerDialog">
+    <form method="dialog" id="customerForm">
+      <h2 id="customerDialogTitle">לקוח חדש</h2>
+      <label>שם<input name="name" required autocomplete="name"></label>
+      <label>טלפון (לוואטסאפ)<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="050-0000000"></label>
+      <label>כתובת<input name="address" autocomplete="street-address"></label>
+      <div class="row two">
+        <button class="btn" value="cancel" formnovalidate>ביטול</button>
+        <button class="btn primary" value="ok">שמירה</button>
+      </div>
+      <button class="btn danger small" id="deleteCustomerBtn" value="delete" formnovalidate hidden>מחיקת לקוח וכל ההדמיות</button>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog">
+    <form method="dialog">
+      <h2>הגדרות</h2>
+      <label>קוד גישה<input id="accessCode" type="password" autocomplete="current-password"></label>
+      <label>מודל הדמיה<select id="providerSelect"></select></label>
+      <label>שם העסק (לחתימה בוואטסאפ)<input id="bizName"></label>
+      <p class="muted small" id="serverStatus"></p>
+      <div class="row two">
+        <button class="btn" type="button" id="refreshCatalog">רענון קטלוג מהאתר</button>
+        <button class="btn primary" value="ok">סגירה</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
