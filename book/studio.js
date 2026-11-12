@@ -10,6 +10,7 @@ export const CONFIG = {
 };
 
 export const BACKDROPS = {
+  white:  { name: 'לבן',         c0: [0.985, 0.985, 0.98], c1: [0.90, 0.90, 0.895], mottle: 0.0, shadow: 0.10, rim: 0.0 },
   gray:   { name: 'אפור סטודיו', c0: [0.60, 0.60, 0.61], c1: [0.22, 0.22, 0.23], mottle: 0.012, shadow: 0.20, rim: 0.10 },
   dark:   { name: 'כהה',         c0: [0.24, 0.24, 0.25], c1: [0.035, 0.035, 0.04], mottle: 0.008, shadow: 0.0, rim: 0.16 },
   light:  { name: 'בהיר',        c0: [0.965, 0.96, 0.955], c1: [0.80, 0.795, 0.79], mottle: 0.006, shadow: 0.16, rim: 0.0 },
@@ -118,6 +119,40 @@ function polyMask(w, h, polys, feather = 0, ox = 0, oy = 0) {
   const d = g.getImageData(0, 0, w, h).data, out = new Float32Array(w * h);
   for (let i = 0; i < out.length; i++) out[i] = d[i * 4] / 255;
   return feather > 0.3 ? blur(out, w, h, feather) : out;
+}
+
+// ---------- matting model (RMBG-1.4 via onnxruntime-web, served from ./vendor) ----------
+const VENDOR = new URL('./vendor/', import.meta.url).href;
+let ortMod = null, rmbg = null, rmbgPromise = null;
+export function initMatting(onProgress = () => {}) {
+  if (rmbgPromise) return rmbgPromise;
+  rmbgPromise = (async () => {
+    ortMod = await import(/* @vite-ignore */ VENDOR + 'ort.wasm.min.mjs');
+    const ort = ortMod.default || ortMod;
+    ort.env.wasm.wasmPaths = VENDOR; ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1;
+    const parts = [1, 2, 3, 4, 5].map((k) => `${VENDOR}rmbg-${k}.onnx`), total = 44403226, bufs = new Array(parts.length), got = new Array(parts.length).fill(0);
+    await Promise.all(parts.map(async (u, k) => {
+      const res = await fetch(u); if (!res.ok) throw new Error('model ' + res.status);
+      const rd = res.body.getReader(), chunks = [];
+      for (;;) { const { done, value } = await rd.read(); if (done) break; chunks.push(value); got[k] += value.length; onProgress(got.reduce((a, b) => a + b, 0) / total); }
+      const b = new Uint8Array(got[k]); let o = 0; for (const c of chunks) { b.set(c, o); o += c.length; } bufs[k] = b;
+    }));
+    const all = new Uint8Array(bufs.reduce((a, b) => a + b.length, 0)); let o = 0; for (const b of bufs) { all.set(b, o); o += b.length; }
+    rmbg = { ort, session: await ort.InferenceSession.create(all, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' }) };
+  })().catch((e) => { rmbgPromise = null; throw e; });
+  return rmbgPromise;
+}
+async function runMatting(canvas, N) {
+  await initMatting();
+  const c = canvasOf(N, N), g = ctxOf(c); g.imageSmoothingQuality = 'high'; g.drawImage(canvas, 0, 0, N, N);
+  const d = g.getImageData(0, 0, N, N).data, x = new Float32Array(3 * N * N), nn = N * N;
+  for (let i = 0; i < nn; i++) { x[i] = d[i * 4] / 255 - 0.5; x[nn + i] = d[i * 4 + 1] / 255 - 0.5; x[2 * nn + i] = d[i * 4 + 2] / 255 - 0.5; }
+  const { ort, session } = rmbg;
+  const out = await session.run({ [session.inputNames[0]]: new ort.Tensor('float32', x, [1, 3, N, N]) });
+  const y = out[session.outputNames[0]].data; let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < nn; i++) { if (y[i] < mn) mn = y[i]; if (y[i] > mx) mx = y[i]; }
+  const r = new Float32Array(nn), k = 1 / Math.max(1e-6, mx - mn); for (let i = 0; i < nn; i++) r[i] = (y[i] - mn) * k;
+  return r;
 }
 
 // ---------- models ----------
@@ -387,21 +422,46 @@ export async function prepareFrame(source, rect, maxSide, onStage = () => {}) {
   onStage('מעדן את קווי המתאר…'); await nextFrame();
   const n = w * h;
   const img = g.getImageData(0, 0, w, h); const px = img.data;
-  // --- alpha matte: guided filter against the image, at <=1024
-  const ms = Math.min(1, 1024 / Math.max(w, h)), mw = Math.round(w * ms), mh = Math.round(h * ms);
-  const mc = canvasOf(mw, mh), mg = ctxOf(mc); mg.imageSmoothingQuality = 'high'; mg.drawImage(canvas, 0, 0, mw, mh);
-  const md = mg.getImageData(0, 0, mw, mh).data, I = new Float32Array(mw * mh);
-  for (let i = 0; i < mw * mh; i++) I[i] = lum(md[i * 4], md[i * 4 + 1], md[i * 4 + 2]) / 255;
-  const p = resample(grid.person, grid.w, grid.h, mw, mh);
-  const gr = Math.max(2, Math.round(Math.max(mw, mh) * 0.006));
-  let q = guidedFilter(I, p, mw, mh, gr, 2e-4);
-  const pSoft = blur(p, mw, mh, gr * 1.5);
-  for (let i = 0; i < q.length; i++) {
-    // trust the coarse mask far from its edge; let the guided filter decide near it
-    const core = smooth(0.80, 0.98, pSoft[i]), far = 1 - smooth(0.02, 0.2, pSoft[i]);
-    q[i] = clamp(Math.max(core, smooth(0.36, 0.93, q[i]) * (1 - far)), 0, 1);
+  // --- alpha matte: RMBG (high-res matting model), cleaned to the main subject, edge-refined against the image
+  onStage('גוזר את הדמות…'); await nextFrame();
+  const RM = 1024, rm = await runMatting(canvas, RM);
+  const ms = Math.min(1, 1600 / Math.max(w, h)), mw = Math.round(w * ms), mh = Math.round(h * ms);
+  let p = resample(rm, RM, RM, mw, mh);
+  {
+    // keep the subject the face belongs to (drops passers-by and stray objects)
+    const cc = components(p, mw, mh, 0.5);
+    if (cc.comps.length > 1) {
+      let best = null;
+      if (grid.faceBlob) {
+        const f = grid.faceBlob, fx = Math.round((f.x0 + f.x1 + 1) / 2 / grid.w * mw), fy = Math.round((f.y0 + f.y1 + 1) / 2 / grid.h * mh);
+        best = cc.lab[clamp(fy, 0, mh - 1) * mw + clamp(fx, 0, mw - 1)] || null;
+      }
+      if (!best) best = cc.comps.reduce((x, y) => (y.area > x.area ? y : x)).id;
+      const main = cc.comps[best - 1], keepIds = new Set([best]);
+      for (const c of cc.comps) if (c.area > main.area * 0.03 && c.x1 >= main.x0 && c.x0 <= main.x1 && c.y1 >= main.y0 && c.y0 <= main.y1) keepIds.add(c.id);
+      const keep = new Float32Array(mw * mh); for (let i = 0; i < keep.length; i++) keep[i] = keepIds.has(cc.lab[i]) ? 1 : 0;
+      const soft = blur(keep, mw, mh, Math.max(2, mw * 0.004));
+      for (let i = 0; i < p.length; i++) p[i] *= smooth(0.05, 0.45, soft[i]);
+    }
   }
-  const alpha = resample(q, mw, mh, w, h);
+  {
+    // sharpen the upsampled matte against the real edges, but only inside the soft edge band
+    const mc = canvasOf(mw, mh), mg = ctxOf(mc); mg.imageSmoothingQuality = 'high'; mg.drawImage(canvas, 0, 0, mw, mh);
+    const md = mg.getImageData(0, 0, mw, mh).data, I = new Float32Array(mw * mh);
+    for (let i = 0; i < mw * mh; i++) I[i] = lum(md[i * 4], md[i * 4 + 1], md[i * 4 + 2]) / 255;
+    const r = Math.max(2, Math.round(Math.max(mw, mh) / RM * 2.5));
+    const q = guidedFilter(I, p, mw, mh, r, 1e-3);
+    for (let i = 0; i < p.length; i++) {
+      const band = 4 * p[i] * (1 - p[i]); // 0 in solid areas, 1 at the 50% edge
+      const v = p[i] + (clamp(q[i], 0, 1) - p[i]) * clamp(band * 1.6, 0, 0.85);
+      p[i] = v < 0.015 ? 0 : v > 0.985 ? 1 : v;
+    }
+  }
+  { // fill pinholes inside the body (a white collar against a white wall must not turn see-through)
+    const big = blur(p, mw, mh, Math.max(2, Math.max(mw, mh) * 0.008));
+    for (let i = 0; i < p.length; i++) p[i] = Math.max(p[i], smooth(0.9, 0.985, big[i]));
+  }
+  const alpha = resample(p, mw, mh, w, h);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x < vx0 || x >= vx1 || y < vy0 || y >= vy1) alpha[y * w + x] = 0;
 
   // --- white balance (conservative gray-world on near-neutral pixels) + exposure from subject highlights
@@ -419,17 +479,53 @@ export async function prepareFrame(source, rect, maxSide, onStage = () => {}) {
   const before = canvasOf(w, h); ctxOf(before).drawImage(canvas, 0, 0);
   for (let i = 0; i < n; i++) { px[i * 4] = lut[0][px[i * 4]]; px[i * 4 + 1] = lut[1][px[i * 4 + 1]]; px[i * 4 + 2] = lut[2][px[i * 4 + 2]]; }
 
-  // --- edge decontamination: semi-transparent pixels borrow colour from the solid subject next to them
+  // --- edge decontamination: un-mix the old background out of hair and edge pixels, so nothing of the shop bleeds onto the new backdrop
   {
-    const wgt = new Float32Array(n); for (let i = 0; i < n; i++) { const a = alpha[i]; wgt[i] = a * a * a * a; }
-    const sig = Math.max(1.5, Math.max(w, h) * 0.004), bw = blur(wgt, w, h, sig), ch = new Float32Array(n);
+    const f = 3, sig = Math.max(2, Math.max(w, h) * 0.012) / f;
+    const wb = new Float32Array(n), wf = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const a = alpha[i], b = 1 - a; wb[i] = b * b * b * b; wf[i] = a * a * a * a; }
+    const dwb = downsample(wb, w, h, f), dwf = downsample(wf, w, h, f), bwb = gaussXY(dwb.data, dwb.w, dwb.h, sig, sig), bwf = gaussXY(dwf.data, dwf.w, dwf.h, sig * 0.4, sig * 0.4);
+    const Bk = [], Fk = [], ch = new Float32Array(n);
     for (let k = 0; k < 3; k++) {
-      for (let i = 0; i < n; i++) ch[i] = px[i * 4 + k] * wgt[i];
-      const bc = blur(ch, w, h, sig);
-      for (let i = 0; i < n; i++) {
-        const a = alpha[i]; if (a < 0.01 || a > 0.985 || bw[i] < 0.02) continue;
-        const t = (1 - a) * smooth(0.02, 0.2, bw[i]);
-        px[i * 4 + k] += (bc[i] / bw[i] - px[i * 4 + k]) * t;
+      for (let i = 0; i < n; i++) ch[i] = px[i * 4 + k] * wb[i];
+      const db = downsample(ch, w, h, f); Bk.push(gaussXY(db.data, db.w, db.h, sig, sig));
+      for (let i = 0; i < n; i++) ch[i] = px[i * 4 + k] * wf[i];
+      const df = downsample(ch, w, h, f); Fk.push(gaussXY(df.data, df.w, df.h, sig * 0.4, sig * 0.4));
+    }
+    const dw = dwb.w, dh = dwb.h;
+    // colour-line refinement: near the edge, a pixel's alpha is where its colour sits between the old background and the subject
+    const near = blur(alpha, w, h, Math.max(1.2, Math.max(w, h) * 0.0025));
+    for (let y = 0; y < h; y++) {
+      const dy = Math.min(dh - 1, (y / f) | 0);
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x, a = alpha[i], edge = 1 - smooth(0.82, 0.995, near[i]); if (a < 0.004 || edge < 0.01) continue;
+        const di = dy * dw + Math.min(dw - 1, (x / f) | 0), sb = bwb[di], sf = bwf[di]; if (sb < 1e-4 || sf < 1e-4) continue;
+        let dd = 0, dot = 0;
+        for (let k = 0; k < 3; k++) { const B = Bk[k][di] / sb, d = Fk[k][di] / sf - B; dd += d * d; dot += (px[i * 4 + k] - B) * d; }
+        const conf = smooth(30, 90, Math.sqrt(dd)); if (conf < 0.01) continue;
+        const ac = clamp(dot / dd, 0, 1);
+        if (ac < a) alpha[i] = a + (ac - a) * conf * edge; // only ever thins: removes leftover background, never adds it
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      const dy = Math.min(dh - 1, (y / f) | 0);
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x, a = alpha[i]; if (a < 0.004 || a > 0.995) continue;
+        const di = dy * dw + Math.min(dw - 1, (x / f) | 0), sb = bwb[di], sf = bwf[di];
+        for (let k = 0; k < 3; k++) {
+          const I = px[i * 4 + k];
+          const B = sb > 1e-4 ? Bk[k][di] / sb : I, Fin = sf > 1e-4 ? Fk[k][di] / sf : I;
+          const Fun = clamp((I - (1 - a) * B) / Math.max(a, 0.05), 0, 255); // compositing equation solved for the foreground
+          const t = smooth(0.08, 0.45, a); // thin wisps: unreliable to un-mix, take the nearby subject colour
+          let F = Fin + (Fun - Fin) * t;
+          F = Math.min(F, Math.max(Fin * 1.25, I)); // never invent a halo brighter than the subject next to it
+          px[i * 4 + k] = F;
+        }
+        // edge pixels keep their own brightness but take the subject's colour: no tinted fringe from the old background
+        const e = (1 - smooth(0.82, 0.995, near[i])) * 0.8; if (e < 0.01 || sf < 1e-4) continue;
+        const L = lum(px[i * 4], px[i * 4 + 1], px[i * 4 + 2]), fr = Fk[0][di] / sf, fg = Fk[1][di] / sf, fb = Fk[2][di] / sf, Lf = Math.max(1, lum(fr, fg, fb));
+        const tr = fr * L / Lf, tg = fg * L / Lf, tb = fb * L / Lf;
+        px[i * 4] += (tr - px[i * 4]) * e; px[i * 4 + 1] += (tg - px[i * 4 + 1]) * e; px[i * 4 + 2] += (tb - px[i * 4 + 2]) * e;
       }
     }
   }
@@ -476,7 +572,7 @@ export async function prepareFrame(source, rect, maxSide, onStage = () => {}) {
 
 // ---------- render: the look ----------
 export function renderFrame(fr, o = {}) {
-  const opt = { backdrop: 'gray', retouch: 0.55, light: 0.6, eyes: 0.65, bw: false, ...o };
+  const opt = { backdrop: 'white', retouch: 0.55, light: 0.6, eyes: 0.65, bw: false, ...o };
   const { w, h, pixels: px, alpha, skin, pts, fm } = fr, n = w * h;
   const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n);
   for (let i = 0; i < n; i++) { R[i] = px[i * 4] / 255; G[i] = px[i * 4 + 1] / 255; B[i] = px[i * 4 + 2] / 255; }

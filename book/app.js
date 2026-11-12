@@ -9,7 +9,7 @@ const state = {
   frames: { head: null, full: null },
   outs: { head: null, full: null, card: null },
   dirty: { head: false, full: false, card: false },
-  look: { backdrop: 'gray', retouch: 0.55, light: 0.6, eyes: 0.65, bw: false },
+  look: { backdrop: 'white', retouch: 0.55, light: 0.6, eyes: 0.65, bw: false },
   tab: 'head', headFromFull: false,
 };
 window.__book = { state, studio }; // debug hook
@@ -31,7 +31,7 @@ for (const slot of ['face', 'full']) for (const kind of ['cam', 'lib']) {
   const el = $(`#${slot}-${kind}`);
   el.addEventListener('change', () => { pick(slot, el.files[0]); el.value = ''; });
 }
-studio.init().catch(() => {}); // warm the models while the user is shooting
+studio.init().catch(() => {}); studio.initMatting().catch(() => {}); // warm the models while the user is shooting
 
 // ---------- processing ----------
 const busy = (text, sub) => { $('#busy').hidden = false; if (text) $('#busy-text').textContent = text; if (sub !== undefined) $('#busy-sub').textContent = sub; };
@@ -44,6 +44,7 @@ async function develop() {
   busy('מדליק את הפנסים…', firstRun ? 'בפעם הראשונה נטענים המודלים (כ־30MB). אחר כך זה מהיר.' : '');
   try {
     await studio.init((t) => busy(t));
+    await studio.initMatting((f) => busy('טוען מודל גזירה…', `${Math.round(f * 44)} / 44MB`));
     state.frames = { head: null, full: null }; state.outs = { head: null, full: null, card: null }; state.headFromFull = false;
     let headSrc = null, headRect = null;
     if (state.src.face) {
